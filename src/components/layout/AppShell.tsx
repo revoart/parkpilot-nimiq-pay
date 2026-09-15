@@ -13,6 +13,8 @@ interface AppShellProps {
   showBack?: boolean
   showWallet?: boolean
   showNav?: boolean
+  /** Optional header action, rendered before the wallet pill. */
+  action?: ReactNode
   /** Full-bleed layout for map-first screens (no header, no padding). */
   bleed?: boolean
   className?: string
@@ -24,6 +26,7 @@ export function AppShell({
   showBack = false,
   showWallet = true,
   showNav = false,
+  action,
   bleed = false,
   className,
 }: AppShellProps) {
@@ -52,7 +55,10 @@ export function AppShell({
               <ParkPilotLogo markClassName="h-5" />
             )}
           </div>
-          {showWallet ? <WalletPill /> : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {action}
+            {showWallet ? <WalletPill /> : null}
+          </div>
         </header>
       ) : null}
       <main

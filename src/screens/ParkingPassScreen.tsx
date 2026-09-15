@@ -1,18 +1,23 @@
-import { ArrowDown, Car, ExternalLink, Footprints, Loader2, MapPin, Navigation, Target } from 'lucide-react'
+import {
+  Car,
+  ChevronDown,
+  ExternalLink,
+  Footprints,
+  Loader2,
+  MapPin,
+  Navigation,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { ParkPilotLogo } from '@/components/brand/Logo'
-import { JourneyStep } from '@/components/journey'
 import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { destinationQuery, destinationQueryWith } from '@/hooks/useDestination'
 import { useGeolocation } from '@/hooks/useGeolocation'
-import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
 import { trackEvent } from '@/lib/analytics/events'
 import {
@@ -20,10 +25,9 @@ import {
   saveParkedCar,
   type ParkedCar,
 } from '@/lib/findmycar/storage'
-import { navigateToParkingUrl } from '@/lib/navigation'
 import { getReservation, type ReservationDetails } from '@/lib/reservations'
-import { formatWalkTime } from '@/lib/routing'
 import type { Destination } from '@/types'
+import { cn } from '@/utils/cn'
 import { explorerTxUrl } from '@/utils/explorer'
 import {
   formatDateLabel,
@@ -52,6 +56,7 @@ export function ParkingPassScreen() {
   const [error, setError] = useState<string | null>(null)
   const [parked, setParked] = useState<ParkedCar | null>(null)
   const [pendingSave, setPendingSave] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   const destination = useMemo<Destination | null>(() => {
     const row = details?.reservation
@@ -69,16 +74,6 @@ export function ParkingPassScreen() {
       lng: row.destination_lng,
     }
   }, [details])
-
-  const { route: walkRoute } = useWalkingRoute(
-    details
-      ? {
-          lat: details.parkingSpace.latitude,
-          lng: details.parkingSpace.longitude,
-        }
-      : null,
-    destination ? { lat: destination.lat, lng: destination.lng } : null,
-  )
 
   const load = useCallback(async () => {
     if (!id || !wallet.address) return
@@ -174,7 +169,19 @@ export function ParkingPassScreen() {
   const bookingCode = `PP-${reservation.id.replace(/-/g, '').slice(0, 6).toUpperCase()}`
 
   return (
-    <AppShell showBack title="Parking pass">
+    <AppShell
+      showBack
+      title="Parking pass"
+      action={
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="rounded-xl px-2.5 py-1.5 text-[13px] font-semibold text-ink-muted active:bg-surface"
+        >
+          Done
+        </button>
+      }
+    >
       <div className="space-y-3">
         {/* Digital ticket: one surface, no nested cards. */}
         <div className="overflow-hidden rounded-2xl bg-surface-raised">
@@ -205,11 +212,6 @@ export function ParkingPassScreen() {
             >
               {confirmed ? 'Parking reserved.' : 'Confirming payment…'}
             </h1>
-            <p className="mt-0.5 text-[13px] text-ink-muted">
-              {confirmed
-                ? "You're all set."
-                : 'This usually takes a few seconds.'}
-            </p>
 
             <div className="mt-2.5">
               <StatusPill tone={confirmed ? 'success' : 'warning'}>
@@ -249,88 +251,6 @@ export function ParkingPassScreen() {
           </div>
         </div>
 
-        {destination ? (
-          <Card className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-              Your journey
-            </p>
-            <JourneyStep
-              icon={<Car className="size-4 text-ink" />}
-              label="Drive"
-              detail="Navigate to your parking"
-            />
-            <div className="ml-4">
-              <ArrowDown className="size-3.5 text-ink-faint" />
-            </div>
-            <JourneyStep
-              icon={<MapPin className="size-4 text-ink" />}
-              label="Park"
-              detail={parkingSpace.address}
-            />
-            <div className="ml-4">
-              <ArrowDown className="size-3.5 text-ink-faint" />
-            </div>
-            <JourneyStep
-              icon={<Footprints className="size-4 text-ink" />}
-              label="Walk"
-              detail={
-                walkRoute
-                  ? `${formatWalkTime(walkRoute.durationSeconds)} to your destination`
-                  : 'Walk to your destination'
-              }
-            />
-            <div className="ml-4">
-              <ArrowDown className="size-3.5 text-ink-faint" />
-            </div>
-            <JourneyStep
-              icon={<Target className="size-4 text-ink" />}
-              label="Arrive"
-              detail={destination.name}
-            />
-          </Card>
-        ) : null}
-
-        <Card className="space-y-2">
-          <p className="text-sm font-semibold">Receipt</p>
-          <ReceiptRow
-            label="Amount"
-            value={`${formatUsdt(reservation.amount_usdt)} USDT`}
-          />
-          <ReceiptRow label="Network" value="Polygon" />
-          <ReceiptRow label="Token contract" value="USDT" />
-          <ReceiptRow
-            label="Sender"
-            value={shortenAddress(reservation.evm_address, 6)}
-          />
-          <ReceiptRow
-            label="Recipient"
-            value={
-              payment?.recipient_address
-                ? shortenAddress(payment.recipient_address, 6)
-                : '—'
-            }
-          />
-          <ReceiptRow
-            label="Status"
-            value={confirmed ? 'Confirmed on-chain' : 'Awaiting confirmation'}
-          />
-          {payment?.block_number ? (
-            <ReceiptRow label="Block" value={String(payment.block_number)} />
-          ) : null}
-        </Card>
-
-        {txHash ? (
-          <a
-            href={explorerTxUrl(txHash)}
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-line-strong px-4 py-3.5 text-sm font-semibold"
-          >
-            <ExternalLink className="size-4" />
-            View Transaction
-          </a>
-        ) : null}
-
         {/* Stage 1: drive to the parking space. Never the destination. */}
         <Button
           full
@@ -361,66 +281,108 @@ export function ParkingPassScreen() {
           </Button>
         ) : null}
 
-        <a
-          href={navigateToParkingUrl({
-            lat: parkingSpace.latitude,
-            lng: parkingSpace.longitude,
-          })}
-          target="_blank"
-          rel="noreferrer"
-          className="flex w-full items-center justify-center gap-2 py-1 text-[12px] font-semibold text-ink-muted"
-        >
-          <ExternalLink className="size-3.5" />
-          Open in Google Maps
-        </a>
-
-        {parked ? (
-          <Button
-            variant="secondary"
-            full
-            size="lg"
-            onClick={() =>
-              navigate(`/find-my-car?reservation=${details.reservation.id}`)
+        {/* One slim row instead of another full-width button. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (parked) {
+              navigate(`/find-my-car?reservation=${reservation.id}`)
+              return
             }
-          >
-            <Car className="size-4" />
-            Find My Car
-          </Button>
-        ) : (
-          <Button
-            variant="secondary"
-            full
-            size="lg"
-            onClick={() => {
-              setPendingSave(true)
-              geo.request()
-            }}
-            loading={geo.loading || pendingSave}
-          >
-            <MapPin className="size-4" />
-            I&apos;ve parked here
-          </Button>
-        )}
+            setPendingSave(true)
+            geo.request()
+          }}
+          disabled={geo.loading || pendingSave}
+          className="flex w-full items-center gap-2.5 rounded-2xl bg-surface-raised px-4 py-2.5 text-left active:opacity-80 disabled:opacity-60"
+        >
+          <Car className="size-4 shrink-0 text-ink-soft" />
+          <span className="flex-1 truncate text-[13px] font-semibold">
+            {parked
+              ? 'Find My Car'
+              : pendingSave || geo.loading
+                ? 'Saving your spot…'
+                : "I've parked here"}
+          </span>
+          <MapPin className="size-3.5 shrink-0 text-ink-faint" />
+        </button>
 
         {geo.error ? (
           <p className="text-center text-xs text-ink-muted">{geo.error}</p>
         ) : null}
 
-        <Button
-          full
-          size="lg"
-          onClick={() => navigate(`/session/${details.reservation.id}`)}
-        >
-          Manage session
-        </Button>
+        {/* Everything secondary lives behind one disclosure, so the pass itself
+            stays a pass: what, when, where, and what to do next. */}
+        <div className="overflow-hidden rounded-2xl bg-surface-raised">
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((open) => !open)}
+            aria-expanded={detailsOpen}
+            aria-controls="pass-details"
+            className="flex w-full items-center gap-2 px-4 py-3 text-left active:opacity-80"
+          >
+            <span className="flex-1 text-[13px] font-semibold">Details</span>
+            <ChevronDown
+              className={cn(
+                'size-4 shrink-0 text-ink-faint transition-transform',
+                detailsOpen && 'rotate-180',
+              )}
+            />
+          </button>
 
-        <Button variant="secondary" full size="lg" onClick={() => navigate('/my-parking')}>
-          View Reservation
-        </Button>
+          {detailsOpen ? (
+            <div id="pass-details" className="space-y-2 px-4 pb-4">
+              <ReceiptRow
+                label="Amount"
+                value={`${formatUsdt(reservation.amount_usdt)} USDT`}
+              />
+              <ReceiptRow label="Network" value="Polygon" />
+              <ReceiptRow
+                label="Sender"
+                value={shortenAddress(reservation.evm_address, 6)}
+              />
+              <ReceiptRow
+                label="Recipient"
+                value={
+                  payment?.recipient_address
+                    ? shortenAddress(payment.recipient_address, 6)
+                    : '—'
+                }
+              />
+              <ReceiptRow
+                label="Status"
+                value={
+                  confirmed ? 'Confirmed on-chain' : 'Awaiting confirmation'
+                }
+              />
+              {payment?.block_number ? (
+                <ReceiptRow
+                  label="Block"
+                  value={String(payment.block_number)}
+                />
+              ) : null}
 
-        <Button variant="ghost" full size="lg" onClick={() => navigate('/')}>
-          Done
-        </Button>
+              {txHash ? (
+                <a
+                  href={explorerTxUrl(txHash)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 pt-1 text-[13px] font-semibold text-ink"
+                >
+                  <ExternalLink className="size-3.5" />
+                  View transaction
+                </a>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => navigate(`/session/${reservation.id}`)}
+                className="block pt-1 text-[13px] font-semibold text-ink"
+              >
+                Manage session
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </AppShell>
   )
