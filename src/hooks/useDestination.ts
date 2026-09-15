@@ -31,3 +31,15 @@ export function destinationQuery(destination: Destination | null): string {
   if (destination.address) params.set('address', destination.address)
   return `?${params.toString()}`
 }
+
+/** `destinationQuery` plus extra params, e.g. `{ leg: 'walk' }`. */
+export function destinationQueryWith(
+  destination: Destination | null,
+  extra: Record<string, string>,
+): string {
+  const base = destinationQuery(destination)
+  const params = new URLSearchParams(base.startsWith('?') ? base.slice(1) : '')
+  for (const [key, value] of Object.entries(extra)) params.set(key, value)
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}

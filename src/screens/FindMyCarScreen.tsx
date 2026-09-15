@@ -31,6 +31,13 @@ export function FindMyCarScreen() {
     setCar(reservationId ? getParkedCar(reservationId) : getCurrentParkedCar())
   }, [reservationId])
 
+  // Ask for a fix straight away — the whole point of this screen is the walk
+  // back to the car, so the distance should be there without an extra tap.
+  useEffect(() => {
+    geo.request()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Walking route from wherever the driver is now back to the car.
   const { route: walkRoute, loading: walkLoading } = useWalkingRoute(
     geo.coords,

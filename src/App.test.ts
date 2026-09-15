@@ -11,6 +11,7 @@ const EXPECTED_ROUTES = [
   '/',
   '/search',
   '/parking/:id',
+  '/navigate/:id',
   '/reserve/:id',
   '/payment/:id',
   '/pass/:id',

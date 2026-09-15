@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { destinationQuery, destinationQueryWith } from '@/hooks/useDestination'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
@@ -19,7 +20,7 @@ import {
   saveParkedCar,
   type ParkedCar,
 } from '@/lib/findmycar/storage'
-import { navigateToDestinationUrl, navigateToParkingUrl } from '@/lib/navigation'
+import { navigateToParkingUrl } from '@/lib/navigation'
 import { getReservation, type ReservationDetails } from '@/lib/reservations'
 import { formatWalkTime } from '@/lib/routing'
 import type { Destination } from '@/types'
@@ -331,6 +332,35 @@ export function ParkingPassScreen() {
         ) : null}
 
         {/* Stage 1: drive to the parking space. Never the destination. */}
+        <Button
+          full
+          size="lg"
+          onClick={() =>
+            navigate(
+              `/navigate/${parkingSpace.id}${destinationQuery(destination)}`,
+            )
+          }
+        >
+          <Navigation className="size-4" />
+          Navigate to Parking
+        </Button>
+
+        {destination ? (
+          <Button
+            variant="outline"
+            full
+            size="lg"
+            onClick={() =>
+              navigate(
+                `/navigate/${parkingSpace.id}${destinationQueryWith(destination, { leg: 'walk' })}`,
+              )
+            }
+          >
+            <Footprints className="size-4" />
+            Walk to Destination
+          </Button>
+        ) : null}
+
         <a
           href={navigateToParkingUrl({
             lat: parkingSpace.latitude,
@@ -338,26 +368,11 @@ export function ParkingPassScreen() {
           })}
           target="_blank"
           rel="noreferrer"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3.5 text-sm font-semibold text-on-ink"
+          className="flex w-full items-center justify-center gap-2 py-1 text-[12px] font-semibold text-ink-muted"
         >
-          <Navigation className="size-4" />
-          Navigate to Parking
+          <ExternalLink className="size-3.5" />
+          Open in Google Maps
         </a>
-
-        {destination ? (
-          <a
-            href={navigateToDestinationUrl({
-              lat: destination.lat,
-              lng: destination.lng,
-            })}
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-line-strong px-4 py-3.5 text-sm font-semibold"
-          >
-            <Footprints className="size-4" />
-            View Walking Route
-          </a>
-        ) : null}
 
         {parked ? (
           <Button

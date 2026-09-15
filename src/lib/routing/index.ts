@@ -1,2 +1,7 @@
 export * from './format'
+export * from './types'
+export * from './polyline'
+export * from './geometry'
+export * from './routesApi'
+export * from './drive'
 export * from './walking'

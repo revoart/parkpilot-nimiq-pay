@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Bookmark,
   Car,
+  Navigation,
   ShieldCheck,
   Star,
   Zap,
@@ -11,7 +12,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/layout/AppShell'
-import { ParkingToDestination } from '@/components/journey'
+import { JourneySummary } from '@/components/journey'
 import { ParkingMap } from '@/components/map/ParkingMap'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { Button } from '@/components/ui/Button'
@@ -19,6 +20,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { destinationQuery, useDestination } from '@/hooks/useDestination'
+import { useDrivingRoute } from '@/hooks/useDrivingRoute'
+import { useGeolocation } from '@/hooks/useGeolocation'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import {
   getParkingReviews,
@@ -48,9 +51,30 @@ export function ParkingDetailScreen() {
   const [saved, setSaved] = useState(false)
 
   const destination = useDestination()
-  const { route } = useWalkingRoute(
-    space ? { lat: space.latitude, lng: space.longitude } : null,
-    destination ? { lat: destination.lat, lng: destination.lng } : null,
+  const geo = useGeolocation()
+
+  const parkingPoint = space
+    ? { lat: space.latitude, lng: space.longitude }
+    : null
+  const destinationPoint = destination
+    ? { lat: destination.lat, lng: destination.lng }
+    : null
+
+  // One fix is enough for a drive estimate here; live tracking belongs to the
+  // navigation screen.
+  useEffect(() => {
+    geo.request()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const { route: driveRoute, loading: driveLoading } = useDrivingRoute(
+    geo.coords,
+    parkingPoint,
+  )
+
+  const { route, loading: walkLoading } = useWalkingRoute(
+    parkingPoint,
+    destinationPoint,
   )
 
   useEffect(() => {
@@ -133,6 +157,9 @@ export function ParkingDetailScreen() {
                 : null
             }
             walkPath={route?.path ?? null}
+            // Keeps the destination marker clear of the inset photo and of
+            // Google's attribution strip along the bottom edge.
+            bottomInset={96}
             className="h-full w-full"
           />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] flex items-center justify-between p-3">
@@ -234,11 +261,11 @@ export function ParkingDetailScreen() {
 
             {destination ? (
               <div className="mt-4">
-                <p className="mb-2 text-[14px] font-bold">After you park</p>
-                <ParkingToDestination
-                  parking={{ title: space.title, address: space.address }}
-                  destination={destination}
-                  route={route}
+                <JourneySummary
+                  driveRoute={driveRoute}
+                  driveLoading={driveLoading}
+                  walkRoute={route}
+                  walkLoading={walkLoading}
                 />
               </div>
             ) : null}
@@ -293,23 +320,36 @@ export function ParkingDetailScreen() {
 
         <div className="absolute inset-x-0 bottom-0 z-[1000] border-t border-line bg-surface-raised px-4 pb-3 pt-2.5">
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[20px] font-bold leading-none tracking-[-0.3px]">
-                {formatUsdt(space.price_usdt)}
-                <span className="ml-1 text-[12px] font-medium text-ink-muted">
-                  per hour · USDT
-                </span>
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate('/search')}
-                className="mt-1 text-[12px] font-semibold text-ink-muted"
-              >
-                View other options
-              </button>
-            </div>
+            <p className="text-[19px] font-bold leading-none tracking-[-0.3px]">
+              {formatUsdt(space.price_usdt)}
+              <span className="ml-1 text-[11px] font-medium text-ink-muted">
+                /hr USDT
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/search')}
+              className="text-[12px] font-semibold text-ink-muted"
+            >
+              View other options
+            </button>
+          </div>
+
+          <div className="mt-2.5 flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={() =>
+                navigate(`/navigate/${space.id}${destinationQuery(destination)}`)
+              }
+            >
+              <Navigation className="mr-1.5 size-4" />
+              Navigate
+            </Button>
             <Button
               size="lg"
+              className="flex-[1.4]"
               onClick={() =>
                 navigate(`/reserve/${space.id}${destinationQuery(destination)}`)
               }

@@ -6,8 +6,11 @@ import { useTheme } from '@/hooks/useTheme'
 import {
   destinationIcon,
   dotIcon,
+  hasMapId,
+  headingIcon,
   isMapsConfigured,
   loadMaps,
+  MAP_ID,
   mapStyle,
   onMapsAuthFailure,
   pinIcon,
@@ -35,6 +38,28 @@ interface GoogleMapProps {
   destination?: LatLng | null
   /** Walking route geometry between the parking space and the destination. */
   walkPath?: LatLng[] | null
+  /**
+   * The active navigation route (driving or walking). Drawn on top of
+   * everything else because it is what the driver is following right now.
+   */
+  routePath?: LatLng[] | null
+  /** Colour for `routePath`. */
+  routeColor?: string
+  /** Dash the active route (used for the walking leg). */
+  routeDashed?: boolean
+  /** Device heading in degrees — rotates the position arrow. */
+  heading?: number | null
+  /** Keep the camera locked on the driver. */
+  follow?: boolean
+  /** Zoom used while following. */
+  followZoom?: number
+  /** Draw the position as a heading arrow instead of a dot. */
+  meVariant?: 'dot' | 'arrow'
+  /**
+   * Show the built-in recenter button. Turn this off when the caller renders
+   * its own, so the map never shows two competing controls.
+   */
+  showRecenter?: boolean
   /** Fires after the map settles, so callers can offer "search this area". */
   onCenterChange?: (center: LatLng) => void
   /** Fires when the user starts dragging the map (not programmatic moves). */
@@ -68,6 +93,14 @@ export function GoogleMap({
   me = null,
   destination = null,
   walkPath = null,
+  routePath = null,
+  routeColor = '#0F0F0F',
+  routeDashed = false,
+  heading = null,
+  follow = false,
+  followZoom = 17,
+  meVariant = 'dot',
+  showRecenter = true,
   onCenterChange,
   onDragStart,
   bottomInset = 0,
@@ -81,6 +114,7 @@ export function GoogleMap({
   const meMarker = useRef<google.maps.Marker | null>(null)
   const destinationMarker = useRef<google.maps.Marker | null>(null)
   const walkLine = useRef<google.maps.Polyline | null>(null)
+  const routeLine = useRef<google.maps.Polyline | null>(null)
   const onCenterChangeRef = useRef(onCenterChange)
   const onDragStartRef = useRef(onDragStart)
   const bottomInsetRef = useRef(bottomInset)
@@ -127,14 +161,23 @@ export function GoogleMap({
       .then((maps) => {
         if (cancelled || !container.current) return
         const first = points[0]
-        map.current = new maps.Map(container.current, {
-          center: center ?? (first ? { lat: first.lat, lng: first.lng } : TORONTO_CENTER),
+        const options: google.maps.MapOptions = {
+          center:
+            center ?? (first ? { lat: first.lat, lng: first.lng } : TORONTO_CENTER),
           zoom,
           disableDefaultUI: true,
           gestureHandling: interactive ? 'greedy' : 'none',
           clickableIcons: false,
-          styles: mapStyle(themeRef.current),
-        })
+        }
+        // A Map ID switches to vector rendering and cloud styling, which is
+        // also what makes camera rotation possible. Google's inline styles are
+        // ignored in that mode, so they are only applied without one.
+        if (hasMapId() && MAP_ID) {
+          options.mapId = MAP_ID
+        } else {
+          options.styles = mapStyle(themeRef.current)
+        }
+        map.current = new maps.Map(container.current, options)
         map.current.addListener('idle', () => {
           // Ignore the settle that follows our own camera moves — only the
           // user moving the map should count as "the map moved".
@@ -164,6 +207,7 @@ export function GoogleMap({
       meMarker.current = null
       destinationMarker.current = null
       walkLine.current = null
+      routeLine.current = null
       map.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,6 +216,7 @@ export function GoogleMap({
   // Re-paint the map when the app theme changes.
   useEffect(() => {
     if (!ready) return
+    if (hasMapId() && MAP_ID) return
     map.current?.setOptions({ styles: mapStyle(theme) })
   }, [ready, theme])
 
@@ -291,11 +336,13 @@ export function GoogleMap({
         map: instance,
         position,
         zIndex: 500,
-        icon: dotIcon('#2563EB'),
       })
     }
     meMarker.current.setPosition(position)
-  }, [ready, meLat, meLng])
+    meMarker.current.setIcon(
+      meVariant === 'arrow' ? headingIcon(heading) : dotIcon('#2563EB'),
+    )
+  }, [ready, meLat, meLng, meVariant, heading])
 
   const destLat = destination?.lat
   const destLng = destination?.lng
@@ -359,6 +406,74 @@ export function GoogleMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, walkKey])
 
+  const routeKey = routePath?.length
+    ? `${routePath.length}:${routePath[0].lat.toFixed(5)},${routePath[0].lng.toFixed(5)}`
+    : ''
+
+  // The route being followed — drawn above every other layer.
+  useEffect(() => {
+    const instance = map.current
+    if (!ready || !instance) return
+
+    routeLine.current?.setMap(null)
+    routeLine.current = null
+
+    if (!routePath || routePath.length < 2) return
+
+    routeLine.current = new google.maps.Polyline({
+      map: instance,
+      path: routePath,
+      strokeColor: routeColor,
+      // A dashed route is drawn entirely by the repeating icon, so the solid
+      // stroke underneath is made invisible.
+      strokeOpacity: routeDashed ? 0 : 0.9,
+      strokeWeight: 6,
+      zIndex: 600,
+      icons: routeDashed
+        ? [
+            {
+              icon: {
+                path: 'M 0,-1 0,1',
+                strokeOpacity: 1,
+                strokeColor: routeColor,
+                scale: 3,
+              },
+              offset: '0',
+              repeat: '14px',
+            },
+          ]
+        : undefined,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, routeKey, routeColor, routeDashed])
+
+  /** Keep the camera locked on the driver while navigating. */
+  const wasFollowing = useRef(false)
+
+  useEffect(() => {
+    const instance = map.current
+    if (!ready || !instance) return
+
+    if (!follow) {
+      wasFollowing.current = false
+      return
+    }
+    if (meLat === undefined || meLng === undefined) return
+
+    lastProgrammaticMove.current = Date.now()
+    if (!wasFollowing.current) {
+      wasFollowing.current = true
+      instance.setZoom(followZoom)
+    }
+    instance.panTo({ lat: meLat, lng: meLng })
+  }, [ready, follow, meLat, meLng, followZoom])
+
+  // Camera rotation needs a vector Map ID; without one this is a no-op.
+  useEffect(() => {
+    if (!ready || !hasMapId() || heading === null) return
+    map.current?.setHeading(heading)
+  }, [ready, heading])
+
   if (failed) {
     return (
       <div
@@ -377,7 +492,7 @@ export function GoogleMap({
   return (
     <div className={cn('relative', className)}>
       <div ref={container} className="h-full w-full bg-map" />
-      {interactive && me ? (
+      {interactive && me && showRecenter ? (
         <button
           type="button"
           aria-label="Recenter on my location"

@@ -9,9 +9,9 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { destinationQueryWith } from '@/hooks/useDestination'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
-import { navigateToDestinationUrl } from '@/lib/navigation'
 import {
   canCancel,
   cancelReservation,
@@ -312,18 +312,19 @@ export function SessionScreen() {
                 </p>
               </div>
             </div>
-            <a
-              href={navigateToDestinationUrl({
-                lat: destination.lat,
-                lng: destination.lng,
-              })}
-              target="_blank"
-              rel="noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-line-strong px-4 py-3 text-sm font-semibold"
+            <Button
+              variant="outline"
+              full
+              size="lg"
+              onClick={() =>
+                navigate(
+                  `/navigate/${parkingSpace.id}${destinationQueryWith(destination, { leg: 'walk' })}`,
+                )
+              }
             >
               <Footprints className="size-4" />
-              Navigate to Destination
-            </a>
+              Walk to Destination
+            </Button>
           </Card>
         ) : null}
 

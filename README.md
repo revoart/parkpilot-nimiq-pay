@@ -37,7 +37,11 @@ Blockchain makes the payment better, not the experience more complicated.
 ## Features
 
 - **Discovery** — list and map views, distance sorting, search, geolocation.
-- **Parking details** — photos placeholder, address, price, type, amenities.
+- **Parking details** — photo, address, price, type, amenities, **drive ETA with
+  live traffic, and the walk to your destination** — all before you pay.
+- **In-app navigation** — drive to the parking space, then walk to your actual
+  destination, with live ETA, turn-by-turn instructions, spoken prompts and
+  off-course rerouting, without leaving ParkPilot.
 - **Reservations** — date/time picker, live price breakdown, availability lock.
 - **USDT payments** — ERC-20 `transfer` encoded with viem, Polygon mainnet.
 - **On-chain verification** — backend confirms chain, token, sender, recipient,
@@ -49,7 +53,8 @@ Blockchain makes the payment better, not the experience more complicated.
   moves wallet-to-wallet, so the platform cannot reverse it automatically).
 - **Expiry** — unpaid reservations release their slot after 15 minutes, so
   abandoned checkouts never block inventory.
-- **Find My Car** — save where you parked and get walking directions.
+- **Find My Car** — save where you parked and walk back to it, with a real
+  routed walking distance from wherever you are now.
 - **Privacy notice** and anonymous, minimal analytics.
 
 ---
@@ -65,20 +70,70 @@ them the headline number.
   (`destination_name / destination_address / destination_lat / destination_lng`)
   so it survives after payment. Browsing without a destination is still fully
   supported and stores nothing.
-- **Walking routes** use the Google Maps JS API in `WALKING` mode —
-  `DirectionsService` for a single pair, `DistanceMatrixService` for the whole
-  result list (**one request, never one per marker**). Cached in memory by
-  coordinate (`src/lib/routing`).
+- **Drive and walk times are shown before any payment.** `/parking/:id` renders
+  `JourneySummary` — `18 min drive · live traffic` and `10 min walk` — using the
+  driver's current location for the drive leg and the parking space for the walk
+  leg. No reservation or wallet connection is needed to see them.
+- **Walking routes** prefer the Routes API (`WALK`) with real pedestrian
+  geometry; `DistanceMatrixService` is still used for the search result list
+  (**one request, never one per marker**). Cached in memory by coordinate
+  (`src/lib/routing`).
 - A straight-line fallback is only ever shown **labelled as an estimate** (`~`,
   "est."). It is never presented as an exact walking route.
-- Reusable pieces: `ParkingToDestination` (the Park → Walk → Arrive stepper),
-  `DestinationCard`, `WalkBadge` — used on search, detail, reserve, payment, pass
-  and session.
-- Navigation never swaps the two: **Navigate to Parking** opens *driving*
-  directions to the parking coordinates; **Walk to Destination** opens *walking*
-  directions to the destination coordinates (`src/lib/navigation.ts`).
-- Without a destination everything degrades to plain parking info — no invented
-  walk times.
+- Reusable pieces: `JourneySummary`, `ParkingToDestination` (the Park → Walk →
+  Arrive stepper), `DestinationCard`, `WalkBadge` — used on search, detail,
+  reserve, payment, pass and session.
+
+### In-app navigation
+
+Navigation happens **inside ParkPilot** at `/navigate/:id`. The pass and session
+screens keep an "Open in Google Maps" link as a deliberate escape hatch, but it
+is no longer the primary action.
+
+The journey runs as one continuous session:
+
+1. **Drive to parking** — live position, traffic-aware ETA, turn-by-turn
+   instructions, spoken prompts, off-course rerouting.
+2. **You've arrived** — ParkPilot detects arrival, then offers
+   **Start Walking** with the walk time and distance.
+3. **Walk to the destination** — the same navigation surface, switched to
+   pedestrian routing.
+
+Architecture (`src/lib/routing`, `src/hooks`):
+
+| Piece | Responsibility |
+| --- | --- |
+| `routesApi.ts` | Google Routes API `computeRoutes` — traffic-aware driving, real walking routes, per-step navigation instructions |
+| `directions.ts` | Legacy `DirectionsService` fallback (still traffic aware) |
+| `drive.ts` / `walking.ts` | The three-layer chain, caching and de-duplication |
+| `polyline.ts` / `geometry.ts` | Pure decoding, projection, progress and off-route maths |
+| `useLiveLocation` | Throttled `watchPosition` with heading, speed and accuracy |
+| `useNavigation` | The state machine: routing, rerouting, arrival, voice triggers |
+| `useVoiceGuidance` | `speechSynthesis` prompts, mute persistence, autoplay handling |
+
+**Navigation states are explicit** (`idle`, `locating`, `route-loading`,
+`route-ready`, `navigating`, `rerouting`, `arrived`, `walking-route-ready`,
+`walking`, `destination-arrived`, `location-denied`, `route-error`) — there are
+no scattered boolean flags.
+
+**Cost control.** A route is *never* requested per GPS fix. The origin is frozen
+when the route is built and only moves on an explicit reroute, which is
+additionally rate-limited to once per 12 s after two consecutive off-course
+fixes. Routes are cached for 90 s (driving) / 10 min (walking).
+
+**Voice.** Instructions are spoken only when the driver crosses a distance band
+(400 m / 150 m / 45 m driving, 120 m / 30 m walking), and the same phrase is
+never repeated inside 9 s. Speech is muted by default on browsers that block
+autoplay — the UI then shows **Enable Voice Navigation**.
+
+**Honest limits.** Camera rotation needs a vector Map ID
+(`VITE_GOOGLE_MAPS_MAP_ID`); without one the map stays raster and the heading is
+conveyed by the position arrow instead. The web build cannot offer native
+Google Navigation SDK turn-by-turn — that would require packaging the app for
+Android/iOS.
+
+Navigation never swaps the two locations: the driving leg targets the **parking
+coordinates**, the walking leg targets the **destination coordinates**.
 
 **ParkPilot Pick** is a deterministic 50/50 blend of price and walking time
 across the visible results (minimum 3 candidates). It is a ranking, not AI, and
@@ -284,7 +339,7 @@ and radius language are unchanged.
 
 - **Frontend**: Vite, React 19, TypeScript, Tailwind CSS v4, React Router
 - **Chain**: viem, `@nimiq/mini-app-sdk`
-- **Map**: Leaflet + OpenStreetMap (no API key required)
+- **Map & routing**: Google Maps JavaScript API + Routes API
 - **Backend**: Supabase (Postgres, Row Level Security, Edge Functions)
 - **Icons**: Lucide
 
@@ -346,10 +401,34 @@ http://<your-lan-ip>:5173/*
 https://<your-domain>/*
 ```
 
-The map is **Google Maps only** — the Maps JavaScript API. `VITE_GOOGLE_MAPS_API_KEY`
-is **required**; without it the map renders a "Map unavailable" placeholder
-instead of crashing. The key must be allowed for every origin you serve from
-(the phone sends the LAN origin in dev), and the API needs billing enabled.
+**Also enable the Routes API on the same project.** It powers in-app drive/walk
+routing and traffic-aware ETAs. The app degrades in layers if it is missing:
+
+| Layer | Requires | What you get |
+| --- | --- | --- |
+| Routes API `computeRoutes` | Routes API enabled | Traffic-aware durations, real walking routes, turn-by-turn instructions |
+| `DirectionsService` | Directions API (JS API) | Routed geometry, traffic-aware driving, simpler steps |
+| Straight-line estimate | nothing | A distance and time clearly labelled `~` / "estimated" |
+
+Nothing is ever presented as an exact route when it is only an estimate.
+
+The map is **Google Maps only** — the Maps JavaScript API.
+`VITE_GOOGLE_MAPS_API_KEY` is **required**; without it the map renders a "Map
+unavailable" placeholder instead of crashing. The key must be allowed for every
+origin you serve from (the phone sends the LAN origin in dev), and the API needs
+billing enabled.
+
+`VITE_GOOGLE_MAPS_MAP_ID` is optional. Setting a **cloud-styled Map ID** switches
+the map to vector rendering, which is the only way to enable camera rotation
+during navigation. Without one the map is raster, camera rotation is skipped
+rather than faked, and heading is shown with the position arrow instead. Note
+that a Map ID also moves styling into Google Cloud — inline `styles` are ignored
+once it is set.
+
+Google's required attribution (the logo and "Map data ©…") is never hidden,
+covered or altered. App UI on the navigation screen deliberately stops short of
+the bottom edge so the attribution strip stays clear, and there is a pixel check
+for this in the browser verification harness.
 
 Live location uses `navigator.geolocation`, which browsers only expose on a
 **secure context** — so it works on `https://` and `localhost`, but not over

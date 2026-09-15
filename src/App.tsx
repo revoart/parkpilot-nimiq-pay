@@ -26,6 +26,11 @@ const ParkingDetailScreen = lazy(() =>
     default: m.ParkingDetailScreen,
   })),
 )
+const NavigationScreen = lazy(() =>
+  import('@/screens/NavigationScreen').then((m) => ({
+    default: m.NavigationScreen,
+  })),
+)
 const ReserveScreen = lazy(() =>
   import('@/screens/ReserveScreen').then((m) => ({ default: m.ReserveScreen })),
 )
@@ -114,6 +119,7 @@ export default function App() {
                     <Route path="/" element={<HomeScreen />} />
                     <Route path="/search" element={<SearchScreen />} />
                     <Route path="/parking/:id" element={<ParkingDetailScreen />} />
+                    <Route path="/navigate/:id" element={<NavigationScreen />} />
                     <Route path="/reserve/:id" element={<ReserveScreen />} />
                     <Route path="/payment/:id" element={<PaymentScreen />} />
                     <Route path="/pass/:id" element={<ParkingPassScreen />} />

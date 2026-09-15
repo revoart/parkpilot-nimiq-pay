@@ -5,6 +5,22 @@ export type GoogleMapsNamespace = typeof google.maps
 export const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 const CHANNEL = import.meta.env.VITE_GOOGLE_MAPS_TRACKING_ID
 
+/**
+ * Optional cloud-styled Map ID.
+ *
+ * When present the map renders vector tiles, which is what enables camera
+ * rotation (`setHeading`). Without it the map is raster and rotation is
+ * silently ignored — so the UI must not offer it. Google's own styles are
+ * ignored once a Map ID is set, because styling moves to the cloud.
+ */
+export const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as
+  | string
+  | undefined
+
+export function hasMapId(): boolean {
+  return typeof MAP_ID === 'string' && MAP_ID.trim().length > 0
+}
+
 const LOAD_TIMEOUT_MS = 12_000
 
 let loading: Promise<GoogleMapsNamespace> | null = null
@@ -177,4 +193,21 @@ export function destinationIcon(): MapIcon {
     <circle cx="17" cy="17" r="2.5" fill="#FFFFFF"/>
   </svg>`
   return svgIcon(svg, size, size, 17, 17)
+}
+
+/**
+ * The driver's position while navigating — an arrow pointing along the
+ * direction of travel. Rotating the marker is how we convey heading when the
+ * map itself is raster and cannot rotate.
+ */
+export function headingIcon(heading: number | null): MapIcon {
+  const size = 36
+  const rotation = heading === null || Number.isNaN(heading) ? 0 : heading
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <g transform="rotate(${rotation} 18 18)">
+      <circle cx="18" cy="18" r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2.5"/>
+      <path d="M18 8 L25 25 L18 20.5 L11 25 Z" fill="#FFFFFF"/>
+    </g>
+  </svg>`
+  return svgIcon(svg, size, size, 18, 18)
 }
