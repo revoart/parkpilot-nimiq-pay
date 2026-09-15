@@ -4,6 +4,8 @@ export interface PlatformConfig {
   feeBps: number
   treasuryAddress: string
   minPayoutUsdt: number
+  /** Wallets allowed to settle payouts (signers, when the treasury is a multisig). */
+  operatorAddresses: string[]
 }
 
 const DEFAULT_FEE_BPS = 1000
@@ -24,21 +26,39 @@ export async function getPlatformConfig(
     map.get('min_payout_usdt') ?? DEFAULT_MIN_PAYOUT,
   )
 
+  const rawOperators = map.get('operator_addresses')
+  const operatorAddresses = Array.isArray(rawOperators)
+    ? rawOperators
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.toLowerCase())
+    : []
+
   return {
     feeBps: Number.isFinite(feeBps) ? feeBps : DEFAULT_FEE_BPS,
     treasuryAddress,
     minPayoutUsdt: Number.isFinite(minPayoutUsdt)
       ? minPayoutUsdt
       : DEFAULT_MIN_PAYOUT,
+    operatorAddresses,
   }
 }
 
 /** Integer-only fee split — never floating point. */
+/**
+ * Split a gross amount into host and platform shares.
+ *
+ * The rate is clamped to 0–10000 bps: a misconfigured `platform_fee_bps` above
+ * 100% must never produce a fee larger than the gross, which would credit the
+ * host a negative amount.
+ */
 export function splitRaw(
   grossRaw: bigint,
   feeBps: number,
 ): { hostRaw: bigint; feeRaw: bigint } {
-  const feeRaw = (grossRaw * BigInt(Math.max(0, Math.round(feeBps)))) / 10_000n
+  if (grossRaw <= 0n) return { hostRaw: grossRaw, feeRaw: 0n }
+
+  const rate = BigInt(Math.min(10_000, Math.max(0, Math.round(feeBps))))
+  const feeRaw = (grossRaw * rate) / 10_000n
   return { hostRaw: grossRaw - feeRaw, feeRaw }
 }
 
@@ -214,7 +234,7 @@ export async function getHostWalletSummary(
     .from('payouts')
     .select('amount_usdt')
     .ilike('host_address', address)
-    .in('status', ['requested', 'processing'])
+    .eq('status', 'requested')
 
   const reserved = (inFlight ?? []).reduce(
     (sum, row) => sum + Number(row.amount_usdt ?? 0),

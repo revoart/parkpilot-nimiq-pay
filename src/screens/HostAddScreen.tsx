@@ -1,7 +1,8 @@
 import { ImagePlus } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { AvailabilityPicker } from '@/components/host/AvailabilityPicker'
 import { HostShell } from '@/components/layout/HostShell'
 import { LocationMap } from '@/components/map/LocationMap'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
@@ -10,18 +11,30 @@ import { useToast } from '@/components/ui/Toast'
 import { Toggle } from '@/components/ui/Toggle'
 import { useAddressSuggestions } from '@/hooks/useAddressSuggestions'
 import { useWallet } from '@/hooks/useWallet'
-import { createParkingSpace, uploadParkingPhoto } from '@/lib/host'
+import {
+  createParkingSpace,
+  setAvailability,
+  uploadParkingPhoto,
+} from '@/lib/host'
+import {
+  dayRulesToInput,
+  defaultDayRules,
+  describeDayRules,
+  type DayRule,
+} from '@/lib/parking'
 import { TORONTO_CENTER } from '@/utils/geo'
 import { cn } from '@/utils/cn'
 import { hapticConfirm } from '@/utils/haptics'
 
-const TOTAL = 6
-const PHOTO_STEP = 5
+const TOTAL = 7
+const PHOTO_STEP = 6
+const REVIEW_STEP = 7
 const TITLES = [
   'Where is your space?',
   'What type of space?',
   'Set your price',
   'Listing details',
+  'When can drivers book?',
   'Parking photo',
   'Review listing',
 ]
@@ -49,6 +62,7 @@ export function HostAddScreen() {
   const [covered, setCovered] = useState(true)
   const [evCharging, setEvCharging] = useState(false)
   const [accessible, setAccessible] = useState(false)
+  const [days, setDays] = useState<DayRule[]>(defaultDayRules)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [suppressSuggestions, setSuppressSuggestions] = useState(false)
@@ -97,6 +111,8 @@ export function HostAddScreen() {
   const coordsValid = Number.isFinite(lat) && Number.isFinite(lng)
   const priceValue = Number(price)
 
+  const hoursSummary = useMemo(() => describeDayRules(days), [days])
+
   function stepValid(): boolean {
     if (step === 1) return address.trim().length >= 5 && coordsValid
     if (step === 2) return Boolean(parkingType)
@@ -130,9 +146,16 @@ export function HostAddScreen() {
       return
     }
 
+    const { rules, error: ruleError } = dayRulesToInput(days)
+    if (ruleError) {
+      setError(ruleError)
+      setStep(5)
+      return
+    }
+
     setSubmitting(true)
     try {
-      await createParkingSpace({
+      const space = await createParkingSpace({
         evmAddress: wallet.address,
         title: title.trim(),
         address: address.trim(),
@@ -146,6 +169,16 @@ export function HostAddScreen() {
         accessible,
         imageUrl: photoUrl,
       })
+
+      // Rules attach to a listing id, so they can only be saved once it exists.
+      if (rules.length > 0) {
+        try {
+          await setAvailability(wallet.address, space.id, rules)
+        } catch {
+          toast.show('Published, but your hours could not be saved.', 'error')
+        }
+      }
+
       toast.show('Listing published.', 'success')
       hapticConfirm()
       navigate('/host')
@@ -318,6 +351,16 @@ export function HostAddScreen() {
           </div>
         ) : null}
 
+        {step === 5 ? (
+          <div className="space-y-3">
+            <p className="text-[13px] leading-relaxed text-ink-muted">
+              Choose the hours drivers can book. Leave every day off to accept
+              bookings at any time.
+            </p>
+            <AvailabilityPicker days={days} onChange={setDays} />
+          </div>
+        ) : null}
+
         {step === PHOTO_STEP ? (
           <div className="space-y-3">
             <input
@@ -388,7 +431,7 @@ export function HostAddScreen() {
           </div>
         ) : null}
 
-        {step === 6 ? (
+        {step === REVIEW_STEP ? (
           <div className="space-y-3">
             <ListingPhoto
               imageUrl={photoUrl}
@@ -404,6 +447,7 @@ export function HostAddScreen() {
                 value: TYPES.find((type) => type.value === parkingType)?.label ?? '—',
               },
               { label: 'Hourly rate', value: `${price || '0'} USDT` },
+              { label: 'Hours', value: hoursSummary },
               {
                 label: 'Amenities',
                 value:

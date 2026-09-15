@@ -1,28 +1,17 @@
 import { useEffect, useState } from 'react'
 
+import { AvailabilityPicker } from '@/components/host/AvailabilityPicker'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { Toggle } from '@/components/ui/Toggle'
 import { useWallet } from '@/hooks/useWallet'
-import { getAvailability } from '@/lib/parking'
+import {
+  dayRulesToInput,
+  defaultDayRules,
+  getAvailability,
+  type DayRule,
+} from '@/lib/parking'
 import { setAvailability } from '@/lib/host'
-import { cn } from '@/utils/cn'
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const HOURS = Array.from({ length: 25 }, (_, index) =>
-  `${String(index).padStart(2, '0')}:00`,
-)
-
-interface DayRule {
-  enabled: boolean
-  start: string
-  end: string
-}
-
-function defaults(): DayRule[] {
-  return WEEKDAYS.map(() => ({ enabled: false, start: '08:00', end: '20:00' }))
-}
 
 export function AvailabilityEditor({
   parkingSpaceId,
@@ -30,7 +19,7 @@ export function AvailabilityEditor({
   parkingSpaceId: string
 }) {
   const wallet = useWallet()
-  const [days, setDays] = useState<DayRule[]>(defaults)
+  const [days, setDays] = useState<DayRule[]>(defaultDayRules)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -42,7 +31,7 @@ export function AvailabilityEditor({
     getAvailability(parkingSpaceId)
       .then((data) => {
         if (!active) return
-        const next = defaults()
+        const next = defaultDayRules()
         for (const rule of data.rules) {
           if (!rule.active) continue
           next[rule.weekday] = {
@@ -62,29 +51,14 @@ export function AvailabilityEditor({
     }
   }, [parkingSpaceId])
 
-  function update(index: number, patch: Partial<DayRule>) {
-    setDays((current) =>
-      current.map((day, i) => (i === index ? { ...day, ...patch } : day)),
-    )
-  }
-
   async function handleSave() {
     if (!wallet.address) return
     setError(null)
     setMessage(null)
 
-    const rules = days
-      .map((day, weekday) => ({ day, weekday }))
-      .filter(({ day }) => day.enabled)
-      .map(({ day, weekday }) => ({
-        weekday,
-        start_time: day.start,
-        end_time: day.end,
-        active: true,
-      }))
-
-    if (rules.some((rule) => rule.end_time <= rule.start_time)) {
-      setError('End time must be after start time.')
+    const { rules, error: ruleError } = dayRulesToInput(days)
+    if (ruleError) {
+      setError(ruleError)
       return
     }
 
@@ -117,57 +91,7 @@ export function AvailabilityEditor({
         </p>
       </div>
 
-      <div className="space-y-2">
-        {days.map((day, index) => (
-          <div
-            key={WEEKDAYS[index]}
-            className="flex items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2"
-          >
-            <div className="flex items-center gap-2">
-              <Toggle
-                on={day.enabled}
-                ariaLabel={`${WEEKDAYS[index]} available`}
-                onChange={() => update(index, { enabled: !day.enabled })}
-              />
-              <span className="w-9 text-[13px] font-semibold">
-                {WEEKDAYS[index]}
-              </span>
-            </div>
-            <div
-              className={cn(
-                'flex items-center gap-1',
-                !day.enabled && 'opacity-40',
-              )}
-            >
-              <select
-                value={day.start}
-                disabled={!day.enabled}
-                onChange={(event) => update(index, { start: event.target.value })}
-                className="rounded-lg bg-surface-raised px-2 py-1.5 text-[12px] font-semibold outline-none"
-              >
-                {HOURS.map((hour) => (
-                  <option key={hour} value={hour}>
-                    {hour}
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs text-ink-muted">–</span>
-              <select
-                value={day.end}
-                disabled={!day.enabled}
-                onChange={(event) => update(index, { end: event.target.value })}
-                className="rounded-lg bg-surface-raised px-2 py-1.5 text-[12px] font-semibold outline-none"
-              >
-                {HOURS.map((hour) => (
-                  <option key={hour} value={hour}>
-                    {hour}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        ))}
-      </div>
+      <AvailabilityPicker days={days} onChange={setDays} disabled={saving} />
 
       {message ? <p className="text-sm text-success">{message}</p> : null}
       {error ? <p className="text-sm text-danger">{error}</p> : null}

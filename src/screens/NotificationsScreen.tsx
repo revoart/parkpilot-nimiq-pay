@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useWallet } from '@/hooks/useWallet'
+import { markNotificationsSeen } from '@/lib/notifications/unread'
 import {
   listReservations,
   type ReservationSummary,
@@ -85,6 +86,7 @@ export function NotificationsScreen() {
     setError(null)
     try {
       setNotes(buildNotes(await listReservations(wallet.address)))
+      markNotificationsSeen()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load.')
     } finally {

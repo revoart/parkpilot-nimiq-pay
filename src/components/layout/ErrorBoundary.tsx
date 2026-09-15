@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
+import { reportError } from '@/lib/analytics/events'
 import { isDevelopmentMode } from '@/utils/env'
 
 interface ErrorBoundaryProps {
@@ -22,6 +23,7 @@ export class ErrorBoundary extends Component<
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('ParkPilot crashed', error, info)
+    reportError(error, { source: 'react', component_stack: info.componentStack })
   }
 
   render(): ReactNode {

@@ -107,8 +107,16 @@ export function findTransfer(
     if (!log.topics || log.topics.length !== 3) continue
     if (log.topics[0].toLowerCase() !== TRANSFER_TOPIC) continue
 
-    const logFrom = topicToAddress(log.topics[1])
-    const logTo = topicToAddress(log.topics[2])
+    // A log can carry a valid Transfer topic with malformed address topics;
+    // skip those rather than letting one bad log abort verification.
+    let logFrom: string
+    let logTo: string
+    try {
+      logFrom = topicToAddress(log.topics[1])
+      logTo = topicToAddress(log.topics[2])
+    } catch {
+      continue
+    }
     if (logFrom !== from || logTo !== to) continue
 
     return { from: logFrom, to: logTo, value: BigInt(log.data) }

@@ -62,6 +62,76 @@ export interface AvailabilityData {
   exceptions: AvailabilityException[]
 }
 
+// Weekly hours editing -------------------------------------------------------
+
+export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+export const HOURS = Array.from({ length: 25 }, (_, index) =>
+  `${String(index).padStart(2, '0')}:00`,
+)
+
+export interface DayRule {
+  enabled: boolean
+  start: string
+  end: string
+}
+
+export interface DayRuleInput {
+  weekday: number
+  start_time: string
+  end_time: string
+  active: boolean
+}
+
+/** Weekday rows, all off — which means "drivers can book any time". */
+export function defaultDayRules(): DayRule[] {
+  return WEEKDAYS.map(() => ({ enabled: false, start: '08:00', end: '20:00' }))
+}
+
+/** Compact human summary of the configured hours, for review screens. */
+export function describeDayRules(days: DayRule[]): string {
+  const enabled = days
+    .map((day, weekday) => ({ day, weekday }))
+    .filter(({ day }) => day.enabled)
+
+  if (enabled.length === 0) return 'Any time'
+  if (enabled.length === WEEKDAYS.length) {
+    const [first] = enabled
+    const uniform = enabled.every(
+      ({ day }) => day.start === first.day.start && day.end === first.day.end,
+    )
+    if (uniform) return `Every day ${first.day.start}–${first.day.end}`
+  }
+
+  return enabled
+    .map(({ day, weekday }) => `${WEEKDAYS[weekday]} ${day.start}–${day.end}`)
+    .join(', ')
+}
+
+/**
+ * Convert picker state into API rules. Returns an error instead of rules when a
+ * window ends before it starts.
+ */
+export function dayRulesToInput(days: DayRule[]): {
+  rules: DayRuleInput[]
+  error: string | null
+} {
+  const rules = days
+    .map((day, weekday) => ({ day, weekday }))
+    .filter(({ day }) => day.enabled)
+    .map(({ day, weekday }) => ({
+      weekday,
+      start_time: day.start,
+      end_time: day.end,
+      active: true,
+    }))
+
+  if (rules.some((rule) => rule.end_time <= rule.start_time)) {
+    return { rules, error: 'End time must be after start time.' }
+  }
+
+  return { rules, error: null }
+}
+
 export async function getAvailability(
   parkingSpaceId: string,
 ): Promise<AvailabilityData> {

@@ -15,6 +15,7 @@ export type AppEventName =
   | 'reservation_confirmed'
   | 'parking_pass_viewed'
   | 'find_my_car_used'
+  | 'app_error'
 
 interface TrackOptions {
   evmAddress?: string | null
@@ -64,4 +65,28 @@ export async function trackEvent(
   } catch {
     // Intentionally ignored.
   }
+}
+
+/**
+ * Report a crash or unhandled error so it is visible in `app_events` instead of
+ * vanishing into the console. Fire-and-forget, never throws.
+ */
+export function reportError(
+  error: unknown,
+  context: Record<string, unknown> = {},
+): void {
+  const err = error instanceof Error ? error : new Error(String(error))
+
+  void trackEvent('app_error', {
+    metadata: {
+      message: err.message.slice(0, 500),
+      name: err.name,
+      stack: (err.stack ?? '').slice(0, 2000),
+      route:
+        typeof window !== 'undefined' ? window.location.pathname : null,
+      user_agent:
+        typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      ...context,
+    },
+  })
 }

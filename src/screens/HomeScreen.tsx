@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { WalletPill } from '@/components/wallet/WalletPill'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useParkingSpaces } from '@/hooks/useParkingSpaces'
+import { useWallet } from '@/hooks/useWallet'
+import { useUnreadNotificationCount } from '@/lib/notifications/unread'
 import { cn } from '@/utils/cn'
 import { formatDistanceKm } from '@/utils/format'
 import { TORONTO_CENTER, haversineKm, type LatLng } from '@/utils/geo'
@@ -28,6 +30,8 @@ export function HomeScreen() {
   const navigate = useNavigate()
   const { spaces, error, reload, loading } = useParkingSpaces()
   const geo = useGeolocation()
+  const wallet = useWallet()
+  const unread = useUnreadNotificationCount(wallet.address)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [center, setCenter] = useState<LatLng | null>(null)
   const [centeredAt, setCenteredAt] = useState<LatLng | null>(null)
@@ -145,12 +149,18 @@ export function HomeScreen() {
             <WalletPill />
             <button
               type="button"
-              aria-label="Notifications"
+              aria-label={
+                unread > 0
+                  ? `Notifications, ${unread} unread`
+                  : 'Notifications'
+              }
               onClick={() => navigate('/notifications')}
               className="relative flex size-10 items-center justify-center rounded-xl bg-surface-raised/95 shadow-sm shadow-black/5 backdrop-blur-sm"
             >
               <Bell className="size-[17px]" />
-              <span className="absolute right-2.5 top-2.5 size-2 rounded-full border-2 border-surface-raised bg-danger" />
+              {unread > 0 && (
+                <span className="absolute right-2.5 top-2.5 size-2 rounded-full border-2 border-surface-raised bg-danger" />
+              )}
             </button>
           </div>
         </div>

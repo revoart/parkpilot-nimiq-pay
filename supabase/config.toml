@@ -23,12 +23,6 @@ verify_jwt = false
 [functions.list-reservations]
 verify_jwt = false
 
-[functions.wallet-challenge]
-verify_jwt = false
-
-[functions.verify-wallet-signature]
-verify_jwt = false
-
 [functions.create-parking-space]
 verify_jwt = false
 
@@ -66,4 +60,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.mark-payout-paid]
+verify_jwt = false
+
+[functions.get-profile]
+verify_jwt = false
+
+[functions.update-profile]
+verify_jwt = false
+
+[functions.upload-avatar]
+verify_jwt = false
+
+[functions.upload-parking-photo]
 verify_jwt = false

@@ -60,9 +60,14 @@ Deno.serve(async (request) => {
     )
 
     const config = await getPlatformConfig(supabase)
-    if (
-      normalizeAddress(caller) !== normalizeAddress(config.treasuryAddress)
-    ) {
+
+    // The treasury address settles directly; when the treasury is a multisig
+    // (e.g. a Safe) the caller is a signer, so operators are allow-listed.
+    const callerAddress = normalizeAddress(caller)
+    const isTreasury =
+      callerAddress === normalizeAddress(config.treasuryAddress)
+    const isOperator = config.operatorAddresses.includes(callerAddress)
+    if (!isTreasury && !isOperator) {
       return errorResponse(request, 'Not authorized.', 403)
     }
 
