@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Handle } from '@/components/ui/Handle'
-import type { Place } from '@/lib/places'
+import type { Place } from '@/types'
 
 interface PlaceSheetProps {
   open: boolean
@@ -13,6 +13,8 @@ interface PlaceSheetProps {
   allowCustom?: boolean
   customValue?: string
   submitting?: boolean
+  /** Message shown when an address could not be resolved. */
+  error?: string | null
   onClose: () => void
   onSelect: (place: Place) => void
   onCustomSubmit?: (address: string) => void
@@ -26,6 +28,7 @@ export function PlaceSheet({
   allowCustom = false,
   customValue = '',
   submitting = false,
+  error = null,
   onClose,
   onSelect,
   onCustomSubmit,
@@ -87,6 +90,12 @@ export function PlaceSheet({
               Or pick a suggestion below
             </p>
           </div>
+        ) : null}
+
+        {error ? (
+          <p role="alert" className="mt-3 text-sm text-danger">
+            {error}
+          </p>
         ) : null}
 
         <div className="mt-2">

@@ -683,6 +683,35 @@ export type Database = {
     Functions: {
       expire_auth_challenges: { Args: never; Returns: number }
       expire_stale_reservations: { Args: never; Returns: number }
+      nearby_parking_spaces: {
+        Args: {
+          p_lat: number
+          p_lng: number
+          p_radius_m?: number
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          title: string
+          description: string | null
+          address: string
+          latitude: number
+          longitude: number
+          price_usdt: number
+          payment_recipient_address: string
+          parking_type: string | null
+          covered: boolean
+          ev_charging: boolean
+          accessible: boolean
+          active: boolean
+          created_at: string
+          updated_at: string
+          owner_evm_address: string | null
+          image_url: string | null
+          distance_m: number
+          busy_until: string | null
+        }[]
+      }
       request_payout: {
         Args: { p_amount: number; p_host: string; p_payout_address: string }
         Returns: {

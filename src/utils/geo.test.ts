@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { TORONTO_CENTER, haversineKm, walkingMinutes } from './geo'
+import { DEFAULT_MAP_CENTER, haversineKm, walkingMinutes } from './geo'
 
 describe('haversineKm', () => {
   it('returns zero for the same point', () => {
-    expect(haversineKm(TORONTO_CENTER, TORONTO_CENTER)).toBe(0)
+    expect(haversineKm(DEFAULT_MAP_CENTER, DEFAULT_MAP_CENTER)).toBe(0)
   })
 
   it('is symmetric', () => {
@@ -16,14 +16,14 @@ describe('haversineKm', () => {
   it('matches a known distance', () => {
     // Toronto -> Montreal is roughly 505 km.
     const montreal = { lat: 45.5019, lng: -73.5674 }
-    expect(haversineKm(TORONTO_CENTER, montreal)).toBeGreaterThan(480)
-    expect(haversineKm(TORONTO_CENTER, montreal)).toBeLessThan(520)
+    expect(haversineKm(DEFAULT_MAP_CENTER, montreal)).toBeGreaterThan(480)
+    expect(haversineKm(DEFAULT_MAP_CENTER, montreal)).toBeLessThan(520)
   })
 
   it('measures a short city distance accurately', () => {
     // ~0.9 km north of the Toronto centre.
     const nearby = { lat: 43.6612, lng: -79.3832 }
-    const km = haversineKm(TORONTO_CENTER, nearby)
+    const km = haversineKm(DEFAULT_MAP_CENTER, nearby)
     expect(km).toBeGreaterThan(0.85)
     expect(km).toBeLessThan(0.95)
   })

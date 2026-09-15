@@ -1,4 +1,4 @@
-import { TORONTO_PLACES, type Place } from './data'
+import type { Place } from '@/types'
 
 export type PlaceKind = 'home' | 'work'
 
@@ -38,22 +38,15 @@ export function setSavedPlace(kind: PlaceKind, place: Place | null): SavedPlaces
   return next
 }
 
-const MIN_RECENTS = 5
-
 /**
  * Recent destinations.
  *
- * Seeded once on first run with demo areas so the list is never empty — but
- * only when nothing has been stored yet. After that the user's list is
- * authoritative, so removing a recent actually sticks.
+ * Starts **empty**. It used to be pre-seeded with sample areas so the list was
+ * never blank, which meant a brand-new driver saw places they had never been to
+ * presented as their own history.
  */
 export function getRecents(): Place[] {
-  const stored = readJson<Place[]>(RECENT_KEY)
-  if (stored) return stored
-
-  const seeded = TORONTO_PLACES.slice(0, MIN_RECENTS)
-  writeJson(RECENT_KEY, seeded)
-  return seeded
+  return readJson<Place[]>(RECENT_KEY) ?? []
 }
 
 export function addRecent(place: Place): Place[] {

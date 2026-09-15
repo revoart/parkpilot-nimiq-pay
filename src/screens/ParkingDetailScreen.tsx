@@ -259,16 +259,27 @@ export function ParkingDetailScreen() {
               ))}
             </div>
 
-            {destination ? (
-              <div className="mt-4">
-                <JourneySummary
-                  driveRoute={driveRoute}
-                  driveLoading={driveLoading}
-                  walkRoute={route}
-                  walkLoading={walkLoading}
-                />
-              </div>
-            ) : null}
+            {/* The drive leg needs no destination, so it is always real. The
+                walk leg is only shown when we actually have somewhere to walk
+                to — otherwise we ask, rather than inventing a destination. */}
+            <div className="mt-4 space-y-2">
+              <JourneySummary
+                driveRoute={driveRoute}
+                driveLoading={driveLoading}
+                walkRoute={destination ? route : null}
+                walkLoading={destination ? walkLoading : false}
+              />
+              {!destination ? (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  full
+                  onClick={() => navigate('/search')}
+                >
+                  Choose Destination
+                </Button>
+              ) : null}
+            </div>
 
             <div className="mt-4 border-t border-line pt-4">
               <p className="text-[14px] font-bold">About this parking</p>

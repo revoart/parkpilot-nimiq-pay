@@ -33,6 +33,21 @@ export interface ParkingSpace {
   updated_at: string
 }
 
+/**
+ * A listing returned by the radius search, carrying the distance the database
+ * actually measured and its real current state. Never constructed in the UI.
+ */
+export interface NearbyParkingSpace extends ParkingSpace {
+  /** Great-circle distance from the search centre, in metres. */
+  distance_m: number
+  /**
+   * Latest end of a reservation covering right now, or null when the space is
+   * free this moment. Derived from the same rule the reservation overlap
+   * constraint uses.
+   */
+  busy_until: string | null
+}
+
 export interface ParkingSpacePhoto {
   id: string
   parking_space_id: string
@@ -75,6 +90,22 @@ export interface Destination {
   address?: string | null
   lat: number
   lng: number
+}
+
+/**
+ * A destination the driver can pick.
+ *
+ * `id` must be stable for the same real-world place, otherwise saved and recent
+ * destinations duplicate every time the place is searched again.
+ */
+export interface Place {
+  id: string
+  name: string
+  address: string
+  lat: number
+  lng: number
+  /** Geocoder reference (e.g. `node:123456`), when one was supplied. */
+  placeId?: string | null
 }
 
 export interface Payment {

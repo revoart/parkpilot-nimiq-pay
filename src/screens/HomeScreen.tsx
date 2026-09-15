@@ -11,16 +11,15 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { WalletPill } from '@/components/wallet/WalletPill'
 import { useGeolocation } from '@/hooks/useGeolocation'
-import { useParkingSpaces } from '@/hooks/useParkingSpaces'
+import { useNearbyParking } from '@/hooks/useNearbyParking'
 import { useWallet } from '@/hooks/useWallet'
+import { NEARBY_RADIUS_M } from '@/lib/parking'
 import { useUnreadNotificationCount } from '@/lib/notifications/unread'
 import { cn } from '@/utils/cn'
-import { formatDistanceKm } from '@/utils/format'
-import { TORONTO_CENTER, haversineKm, type LatLng } from '@/utils/geo'
+import { haversineKm, type LatLng } from '@/utils/geo'
 
-/** Spots shown as "near you" by default, and the fallback when none are. */
-const NEARBY_KM = 5
-const WIDENED_KM = 25
+/** The radius the driver can opt into. Widening is never automatic. */
+const WIDER_RADIUS_M = 10_000
 /** Approximate height of the listings panel, so pins stay clear of it. */
 const PANEL_INSET = 236
 /** Collapsed panel height (header row only). */
@@ -28,10 +27,10 @@ const COLLAPSED_INSET = 96
 
 export function HomeScreen() {
   const navigate = useNavigate()
-  const { spaces, error, reload, loading } = useParkingSpaces()
   const geo = useGeolocation()
   const wallet = useWallet()
   const unread = useUnreadNotificationCount(wallet.address)
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [center, setCenter] = useState<LatLng | null>(null)
   const [centeredAt, setCenteredAt] = useState<LatLng | null>(null)
@@ -39,7 +38,7 @@ export function HomeScreen() {
   const [mapCenter, setMapCenter] = useState<LatLng | null>(null)
   const [searchArea, setSearchArea] = useState<LatLng | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-  const [showAll, setShowAll] = useState(false)
+  const [radius, setRadius] = useState(NEARBY_RADIUS_M)
 
   useEffect(() => {
     geo.watch()
@@ -66,8 +65,25 @@ export function HomeScreen() {
     if (followMe && geo.error) setFollowMe(false)
   }, [followMe, geo.error])
 
-  const reference = searchArea ?? geo.coords ?? TORONTO_CENTER
+  /**
+   * The centre to search around: the area the driver panned to, otherwise their
+   * real location.
+   *
+   * There is deliberately no fallback centre. Dropping in a fixed city would
+   * present parking that has nothing to do with the driver as if it were
+   * nearby, and would label a place they are not in as "near you".
+   */
+  const searchCenter = searchArea ?? geo.coords
   const located = geo.coords !== null
+
+  const { spaces, loading, error, ready, reload } = useNearbyParking(
+    searchCenter,
+    radius,
+  )
+
+  // The database already applied the radius and sorted by distance, so the map
+  // and the list render the exact same array. There is no second dataset.
+  const visible = spaces
 
   // Only surface "search this area" when the *map* moved, not the driver.
   const movedAway =
@@ -75,53 +91,29 @@ export function HomeScreen() {
     centeredAt !== null &&
     haversineKm(mapCenter, centeredAt) > 0.4
 
-  const ranked = useMemo(
-    () =>
-      spaces
-        .map((space) => ({
-          space,
-          distanceKm: haversineKm(reference, {
-            lat: space.latitude,
-            lng: space.longitude,
-          }),
-        }))
-        .sort((a, b) => a.distanceKm - b.distanceKm),
-    [spaces, reference],
-  )
-
-  /** Genuinely nearby first, then a wider ring if that comes up empty. */
-  const nearby = useMemo(() => {
-    const within = ranked.filter((item) => item.distanceKm <= NEARBY_KM)
-    if (within.length > 0) {
-      return { items: within, widened: false }
-    }
-    return {
-      items: ranked.filter((item) => item.distanceKm <= WIDENED_KM),
-      widened: true,
-    }
-  }, [ranked])
-
-  const visible = showAll ? ranked : nearby.items
-
-  const headerLabel = showAll
-    ? `All spots · ${visible.length}`
-    : nearby.items.length === 0
-      ? 'No spots nearby'
-      : nearby.widened
-        ? `Widened to ${WIDENED_KM} km · ${visible.length}`
-        : `${located ? 'Near you' : 'Toronto'} · ${visible.length} within ${NEARBY_KM} km`
+  const headerLabel = loading
+    ? 'Finding parking…'
+    : !searchCenter
+      ? 'Turn on location'
+      : error
+        ? "Couldn't load parking"
+        : visible.length === 0
+          ? `No parking within ${radius / 1000} km`
+          : `${searchArea ? 'This area' : 'Near you'} · ${visible.length} within ${
+              radius / 1000
+            } km`
 
   const selected = useMemo(
-    () => ranked.find((item) => item.space.id === selectedId) ?? null,
-    [ranked, selectedId],
+    () => spaces.find((space) => space.id === selectedId) ?? null,
+    [spaces, selectedId],
   )
 
   return (
     <AppShell bleed showNav>
       <div className="absolute inset-0">
         <ParkingMap
-          spaces={ranked.map((item) => item.space)}
-          center={center ?? reference}
+          spaces={visible}
+          center={center ?? searchCenter ?? undefined}
           userLocation={geo.coords}
           selectedId={selectedId}
           onSelect={(space) => setSelectedId(space.id)}
@@ -203,7 +195,6 @@ export function HomeScreen() {
             type="button"
             onClick={() => {
               setSearchArea(mapCenter)
-              setShowAll(false)
             }}
             className="pointer-events-auto rounded-full bg-ink px-3.5 py-1.5 text-[11px] font-bold text-on-ink shadow-md shadow-black/20"
           >
@@ -218,9 +209,9 @@ export function HomeScreen() {
           <div className="rounded-2xl bg-surface-raised p-3.5 shadow-lg shadow-black/10">
             <div className="mb-2.5 flex items-center justify-between">
               <p className="text-[12px] font-medium text-ink-muted">
-                {selected.distanceKm < 1
-                  ? `${Math.round(selected.distanceKm * 1000)} m away`
-                  : `${selected.distanceKm.toFixed(1)} km away`}
+                {selected.distance_m < 1000
+                  ? `${Math.round(selected.distance_m)} m away`
+                  : `${(selected.distance_m / 1000).toFixed(1)} km away`}
               </p>
               <button
                 type="button"
@@ -231,7 +222,7 @@ export function HomeScreen() {
               </button>
             </div>
             <ParkingCard
-              space={selected.space}
+              space={selected}
               featured
               onSelect={(space) => navigate(`/parking/${space.id}`)}
             />
@@ -239,7 +230,7 @@ export function HomeScreen() {
               <Button
                 full
                 size="lg"
-                onClick={() => navigate(`/parking/${selected.space.id}`)}
+                onClick={() => navigate(`/parking/${selected.id}`)}
               >
                 View details
               </Button>
@@ -275,7 +266,6 @@ export function HomeScreen() {
                 aria-label="Recenter on my location"
                 onClick={() => {
                   setSearchArea(null)
-                  setShowAll(false)
                   setFollowMe(true)
                   geo.request()
                 }}
@@ -300,23 +290,23 @@ export function HomeScreen() {
                   </button>
                 ) : null}
 
-                {loading ? (
+                {loading || (searchCenter !== null && !ready && !error) ? (
                   <div className="flex gap-2.5 overflow-hidden">
                     <Skeleton className="h-[104px] w-[176px] shrink-0 rounded-2xl" />
                     <Skeleton className="h-[104px] w-[176px] shrink-0 rounded-2xl" />
                   </div>
                 ) : visible.length > 0 ? (
                   <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {visible.slice(0, 8).map((item) => (
+                    {visible.slice(0, 8).map((space) => (
                       <div
-                        key={item.space.id}
+                        key={space.id}
                         className="w-[176px] shrink-0 snap-start"
                       >
                         <ParkingCard
                           compact
-                          space={item.space}
-                          distanceKm={item.distanceKm}
-                          onSelect={(space) => navigate(`/parking/${space.id}`)}
+                          space={space}
+                          distanceKm={space.distance_m / 1000}
+                          onSelect={(item) => navigate(`/parking/${item.id}`)}
                         />
                       </div>
                     ))}
@@ -324,24 +314,45 @@ export function HomeScreen() {
                 ) : (
                   <div className="px-1 pb-1">
                     <p className="text-[13px] font-semibold">
-                      No parking near you yet
+                      {searchCenter === null
+                        ? 'Turn on location'
+                        : `No parking within ${radius / 1000} km`}
                     </p>
                     <p className="mt-0.5 text-[11px] text-ink-muted">
-                      {ranked.length > 0
-                        ? `The nearest listing is ${formatDistanceKm(ranked[0].distanceKm)} away.`
-                        : located
-                          ? 'Nothing is listed in this area right now.'
-                          : 'Turn on location to see what is closest.'}
+                      {searchCenter === null
+                        ? 'Enable location to see what is closest to you.'
+                        : error
+                          ? error
+                          : 'Nothing is listed in this area right now.'}
                     </p>
-                    {ranked.length > 0 ? (
+                    {searchCenter === null ? (
                       <button
                         type="button"
-                        onClick={() => setShowAll(true)}
+                        onClick={() => {
+                          setFollowMe(true)
+                          geo.request()
+                        }}
                         className="mt-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-bold text-on-ink"
                       >
-                        Show all spots
+                        Enable Location
                       </button>
-                    ) : null}
+                    ) : radius < WIDER_RADIUS_M ? (
+                      <button
+                        type="button"
+                        onClick={() => setRadius(WIDER_RADIUS_M)}
+                        className="mt-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-bold text-on-ink"
+                      >
+                        Search up to {WIDER_RADIUS_M / 1000} km
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => navigate('/search')}
+                        className="mt-2 rounded-lg bg-ink px-3 py-1.5 text-[11px] font-bold text-on-ink"
+                      >
+                        Change destination
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

@@ -35,8 +35,11 @@ export function PrivacyScreen() {
           </Card>
         ))}
         <p className="px-1 text-[11px] text-ink-muted">
-          ParkPilot is a demo built for the Nimiq Mini Apps Competition. Parking
-          listings are demo host spaces.
+          ParkPilot was built for the Nimiq Mini Apps Competition. Listings,
+          prices, reviews and availability all come from the live database, and
+          distances and routes are calculated from your real location. The
+          listings currently published are demo host spaces, not commercial
+          parking operators.
         </p>
       </div>
     </AppShell>

@@ -22,7 +22,6 @@ import {
   describeDayRules,
   type DayRule,
 } from '@/lib/parking'
-import { TORONTO_CENTER } from '@/utils/geo'
 import { cn } from '@/utils/cn'
 import { hapticConfirm } from '@/utils/haptics'
 
@@ -53,8 +52,10 @@ export function HostAddScreen() {
 
   const [step, setStep] = useState(1)
   const [address, setAddress] = useState('')
-  const [latitude, setLatitude] = useState(String(TORONTO_CENTER.lat))
-  const [longitude, setLongitude] = useState(String(TORONTO_CENTER.lng))
+  // Deliberately blank: a listing must be placed at a real address, never at a
+  // default coordinate that the host did not choose.
+  const [latitude, setLatitude] = useState('')
+  const [longitude, setLongitude] = useState('')
   const [parkingType, setParkingType] = useState('garage')
   const [price, setPrice] = useState('')
   const [title, setTitle] = useState('')
@@ -108,7 +109,15 @@ export function HostAddScreen() {
 
   const lat = Number(latitude)
   const lng = Number(longitude)
-  const coordsValid = Number.isFinite(lat) && Number.isFinite(lng)
+  const coordsValid =
+    latitude.trim() !== '' &&
+    longitude.trim() !== '' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180 &&
+    // (0, 0) is in the Atlantic — it means the fields were never filled in.
+    !(lat === 0 && lng === 0)
   const priceValue = Number(price)
 
   const hoursSummary = useMemo(() => describeDayRules(days), [days])
@@ -212,10 +221,18 @@ export function HostAddScreen() {
 
         {step === 1 ? (
           <div className="space-y-3">
-            <LocationMap
-              point={{ lat: coordsValid ? lat : TORONTO_CENTER.lat, lng: coordsValid ? lng : TORONTO_CENTER.lng }}
-              className="h-40 w-full overflow-hidden rounded-2xl border border-line"
-            />
+            {coordsValid ? (
+              <LocationMap
+                point={{ lat, lng }}
+                className="h-40 w-full overflow-hidden rounded-2xl border border-line"
+              />
+            ) : (
+              <div className="flex h-40 w-full items-center justify-center rounded-2xl border border-dashed border-line-strong bg-surface-raised px-6 text-center">
+                <p className="text-xs font-medium text-ink-muted">
+                  Pick an address below to place your space on the map.
+                </p>
+              </div>
+            )}
             <input
               value={address}
               onChange={(event) => {

@@ -85,7 +85,9 @@ export function JourneySummary({
             </div>
           ) : (
             <p className="flex-1 text-[13px] text-ink-muted">
-              {walkLoading ? 'Calculating walk…' : 'No destination selected'}
+              {walkLoading
+                ? 'Calculating walk…'
+                : 'Set a destination to see walking time'}
             </p>
           )}
         </div>

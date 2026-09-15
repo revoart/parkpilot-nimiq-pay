@@ -1,6 +1,7 @@
 import { getSupabase } from '@/lib/supabase/client'
 import type { Database } from '@/lib/supabase/database.types'
-import type { ParkingSpace } from '@/types'
+import type { NearbyParkingSpace, ParkingSpace } from '@/types'
+import type { LatLng } from '@/utils/geo'
 
 type ParkingSpaceRow = Database['public']['Tables']['parking_spaces']['Row']
 
@@ -8,9 +9,42 @@ function normalize(row: ParkingSpaceRow): ParkingSpace {
   return { ...row, price_usdt: Number(row.price_usdt) }
 }
 
+/** The discovery radius. Widening is an explicit driver action, never silent. */
+export const NEARBY_RADIUS_M = 5000
+
 /**
- * The demo catalogue is small, so search is applied client-side. This avoids
- * building PostgREST filter strings from user input.
+ * Listings within `radiusMeters` of a point, measured by the database.
+ *
+ * The radius is deliberately not applied in the browser: the previous version
+ * fetched up to 100 listings and filtered them client-side, which meant
+ * "within 5 km" was a guess and listings outside the radius still reached the
+ * map. The RPC uses the (latitude, longitude) index for a bounding box and an
+ * exact haversine to trim it to a true circle, and returns the measured
+ * distance plus real availability state.
+ */
+export async function listNearbyParking(
+  center: LatLng,
+  radiusMeters: number = NEARBY_RADIUS_M,
+): Promise<NearbyParkingSpace[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('nearby_parking_spaces', {
+    p_lat: center.lat,
+    p_lng: center.lng,
+    p_radius_m: Math.round(radiusMeters),
+  })
+
+  if (error) throw new Error(error.message)
+
+  return (data ?? []).map((row) => ({
+    ...row,
+    price_usdt: Number(row.price_usdt),
+    distance_m: Number(row.distance_m),
+  }))
+}
+
+/**
+ * Text search across listings. Used by the host tools and as a fallback when
+ * there is no geographic centre to search around.
  */
 export async function listParkingSpaces(
   search?: string,

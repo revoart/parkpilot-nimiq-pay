@@ -16,7 +16,7 @@ import {
 } from '@/lib/maps/loader'
 import { mapInitOptions, mapThemeOptions, rotationFor } from '@/lib/maps/options'
 import { exposeMapDebug } from '@/lib/maps/debug'
-import { TORONTO_CENTER, type LatLng } from '@/utils/geo'
+import { DEFAULT_MAP_CENTER, type LatLng } from '@/utils/geo'
 import { cn } from '@/utils/cn'
 
 export interface MapPoint {
@@ -189,7 +189,7 @@ export function GoogleMap({
           const options: google.maps.MapOptions = {
             center:
               center ??
-              (first ? { lat: first.lat, lng: first.lng } : TORONTO_CENTER),
+              (first ? { lat: first.lat, lng: first.lng } : DEFAULT_MAP_CENTER),
             zoom,
             disableDefaultUI: true,
             gestureHandling: interactive ? 'greedy' : 'none',

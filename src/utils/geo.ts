@@ -3,8 +3,14 @@ export interface LatLng {
   lng: number
 }
 
-/** Downtown Toronto — the demo catalogue's centre. */
-export const TORONTO_CENTER: LatLng = { lat: 43.6532, lng: -79.3832 }
+/**
+ * Where the map camera sits when there is genuinely nothing to centre on.
+ *
+ * This is **only** a tile centre. It is never the driver's position, never a
+ * search origin, and never labelled in the UI — doing any of those would
+ * present one city's parking as if it were the driver's.
+ */
+export const DEFAULT_MAP_CENTER: LatLng = { lat: 43.6532, lng: -79.3832 }
 
 const EARTH_RADIUS_KM = 6371
 

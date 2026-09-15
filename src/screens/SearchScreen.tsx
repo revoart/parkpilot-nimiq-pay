@@ -20,8 +20,10 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { SwipeToDelete } from '@/components/ui/SwipeToDelete'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useAddressSuggestions } from '@/hooks/useAddressSuggestions'
-import { useParkingSpaces } from '@/hooks/useParkingSpaces'
+import { useGeolocation } from '@/hooks/useGeolocation'
+import { useNearbyParking } from '@/hooks/useNearbyParking'
 import { destinationQuery } from '@/hooks/useDestination'
+import { NEARBY_RADIUS_M } from '@/lib/parking'
 import { getWalkingRoutes, type WalkingLeg } from '@/lib/routing'
 import {
   addRecent,
@@ -30,21 +32,22 @@ import {
   removeRecent,
   getSavedPlaces,
   setSavedPlace,
-  TORONTO_PLACES,
-  type Place,
   type SavedPlaces,
 } from '@/lib/places'
 import { listSaved, type SavedParking } from '@/lib/saved'
-import type { ParkingSpace } from '@/types'
+import type { ParkingSpace, Place } from '@/types'
 import { cn } from '@/utils/cn'
-import { TORONTO_CENTER, haversineKm, type LatLng } from '@/utils/geo'
+import type { LatLng } from '@/utils/geo'
 
 type SheetKind = 'home' | 'work' | 'recent'
+
+/** The radius the driver can opt into. Widening is never automatic. */
+const WIDER_RADIUS_M = 10_000
 
 export function SearchScreen() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const { spaces, loading, error, reload } = useParkingSpaces()
+  const geo = useGeolocation()
 
   const [query, setQuery] = useState('')
   const [saved, setSaved] = useState<SavedPlaces>({ home: null, work: null })
@@ -52,10 +55,12 @@ export function SearchScreen() {
   const [savedPlaces, setSavedPlaces] = useState<SavedParking[]>([])
   const [sheet, setSheet] = useState<SheetKind | null>(null)
   const [geocoding, setGeocoding] = useState(false)
+  const [geocodeError, setGeocodeError] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [evOnly, setEvOnly] = useState(false)
   const [coveredOnly, setCoveredOnly] = useState(false)
   const [maxPrice, setMaxPrice] = useState<number | null>(null)
+  const [radius, setRadius] = useState(NEARBY_RADIUS_M)
   const { suggestions } = useAddressSuggestions(query)
 
   useEffect(() => {
@@ -74,39 +79,50 @@ export function SearchScreen() {
     return null
   }, [params])
 
+  // Ask for a fix once: without a destination it is the only honest centre we
+  // can search around.
+  useEffect(() => {
+    geo.request()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /**
+   * The centre to search around: the driver's destination when they have one,
+   * otherwise their real location.
+   *
+   * There is deliberately no fallback centre. Substituting one would present
+   * parking that has nothing to do with the driver as if it were nearby.
+   */
+  const searchCenter = useMemo<LatLng | null>(
+    () => (dest ? { lat: dest.lat, lng: dest.lng } : geo.coords),
+    [dest, geo.coords],
+  )
+
+  const { spaces: nearby, loading, error, ready, reload } = useNearbyParking(
+    searchCenter,
+    radius,
+  )
+
   const results = useMemo(() => {
-    const origin: LatLng = dest
-      ? { lat: dest.lat, lng: dest.lng }
-      : TORONTO_CENTER
     const term = query.trim().toLowerCase()
     const base = term
-      ? spaces.filter((space) =>
+      ? nearby.filter((space) =>
           [space.title, space.address, space.description ?? '']
             .join(' ')
             .toLowerCase()
             .includes(term),
         )
-      : spaces
+      : nearby
 
-    // Optional refinements — applied on top of the text query.
-    const refined = base.filter((space) => {
+    // Refinements applied on top of the radius query.
+    return base.filter((space) => {
       if (typeFilter && space.parking_type !== typeFilter) return false
       if (evOnly && !space.ev_charging) return false
       if (coveredOnly && !space.covered) return false
       if (maxPrice !== null && Number(space.price_usdt) > maxPrice) return false
       return true
     })
-
-    return refined
-      .map((space) => ({
-        space,
-        distanceKm: haversineKm(origin, {
-          lat: space.latitude,
-          lng: space.longitude,
-        }),
-      }))
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-  }, [spaces, query, dest, typeFilter, evOnly, coveredOnly, maxPrice])
+  }, [nearby, query, typeFilter, evOnly, coveredOnly, maxPrice])
 
   // Walking legs for the visible results — one Distance Matrix request, never
   // one call per marker. Cached in lib/routing.
@@ -115,7 +131,7 @@ export function SearchScreen() {
   const [sort, setSort] = useState<'price' | 'walk'>('price')
 
   const walkTargets = useMemo(() => results.slice(0, 10), [results])
-  const walkTargetKey = walkTargets.map((item) => item.space.id).join(',')
+  const walkTargetKey = walkTargets.map((space) => space.id).join(',')
 
   useEffect(() => {
     if (!dest || walkTargets.length === 0) {
@@ -126,7 +142,7 @@ export function SearchScreen() {
     let active = true
     setWalkLoading(true)
     getWalkingRoutes(
-      walkTargets.map(({ space }) => ({
+      walkTargets.map((space) => ({
         lat: space.latitude,
         lng: space.longitude,
       })),
@@ -135,8 +151,8 @@ export function SearchScreen() {
       .then((legs) => {
         if (!active) return
         const next: Record<string, WalkingLeg> = {}
-        walkTargets.forEach((item, index) => {
-          if (legs[index]) next[item.space.id] = legs[index]
+        walkTargets.forEach((space, index) => {
+          if (legs[index]) next[space.id] = legs[index]
         })
         setWalkLegs(next)
       })
@@ -156,9 +172,9 @@ export function SearchScreen() {
   const ordered = useMemo(() => {
     if (!dest || sort === 'price') return results
     return [...results].sort((a, b) => {
-      const wa = walkLegs[a.space.id]?.durationSeconds
-      const wb = walkLegs[b.space.id]?.durationSeconds
-      if (wa === undefined && wb === undefined) return a.distanceKm - b.distanceKm
+      const wa = walkLegs[a.id]?.durationSeconds
+      const wb = walkLegs[b.id]?.durationSeconds
+      if (wa === undefined && wb === undefined) return a.distance_m - b.distance_m
       if (wa === undefined) return 1
       if (wb === undefined) return -1
       return wa - wb
@@ -168,21 +184,21 @@ export function SearchScreen() {
   // ParkPilot Pick: deterministic blend of price and walk time. Not AI.
   const pickId = useMemo(() => {
     if (!dest || results.length < 3) return null
-    const candidates = results.filter((item) => walkLegs[item.space.id])
+    const candidates = results.filter((space) => walkLegs[space.id])
     if (candidates.length < 3) return null
     const maxPrice = Math.max(
-      ...candidates.map((c) => Number(c.space.price_usdt)),
+      ...candidates.map((c) => Number(c.price_usdt)),
     )
     const maxWalk = Math.max(
-      ...candidates.map((c) => walkLegs[c.space.id].durationSeconds),
+      ...candidates.map((c) => walkLegs[c.id].durationSeconds),
     )
     let best: { id: string; score: number } | null = null
-    for (const item of candidates) {
-      const priceScore = maxPrice > 0 ? Number(item.space.price_usdt) / maxPrice : 0
+    for (const space of candidates) {
+      const priceScore = maxPrice > 0 ? Number(space.price_usdt) / maxPrice : 0
       const walkScore =
-        maxWalk > 0 ? walkLegs[item.space.id].durationSeconds / maxWalk : 0
+        maxWalk > 0 ? walkLegs[space.id].durationSeconds / maxWalk : 0
       const score = priceScore * 0.5 + walkScore * 0.5
-      if (!best || score < best.score) best = { id: item.space.id, score }
+      if (!best || score < best.score) best = { id: space.id, score }
     }
     return best?.id ?? null
   }, [results, walkLegs, dest])
@@ -210,18 +226,32 @@ export function SearchScreen() {
     const trimmed = address.trim()
     if (!trimmed) return
     setGeocoding(true)
-    const coords = await geocodeAddress(trimmed)
+    setGeocodeError(null)
+
+    const result = await geocodeAddress(trimmed)
+    setGeocoding(false)
+
+    if (!result) {
+      // An address we cannot place is an error. It is never a reason to jump
+      // the driver to some other city.
+      setGeocodeError(
+        `We couldn't find “${trimmed}”. Try a more specific address.`,
+      )
+      return
+    }
+
     const place: Place = {
-      id: `custom-${Date.now()}`,
+      // Derived from the coordinates, so the same place dedupes in recents.
+      id: result.placeId ?? `geo-${result.lat.toFixed(5)},${result.lng.toFixed(5)}`,
       name: trimmed,
-      address: trimmed,
-      lat: coords?.lat ?? TORONTO_CENTER.lat,
-      lng: coords?.lng ?? TORONTO_CENTER.lng,
+      address: result.label ?? trimmed,
+      lat: result.lat,
+      lng: result.lng,
+      placeId: result.placeId,
     }
     if (sheet === 'home' || sheet === 'work') {
       setSaved(setSavedPlace(sheet, place))
     }
-    setGeocoding(false)
     setSheet(null)
     goToPlace(place)
   }
@@ -238,14 +268,14 @@ export function SearchScreen() {
     home: {
       title: 'Home address',
       subtitle: 'Set your home address to find parking nearby.',
-      places: TORONTO_PLACES,
+      places: [],
       allowCustom: true,
       customValue: saved.home?.address ?? '',
     },
     work: {
       title: 'Work address',
       subtitle: 'Set your work address to find parking nearby.',
-      places: TORONTO_PLACES,
+      places: [],
       allowCustom: true,
       customValue: saved.work?.address ?? '',
     },
@@ -409,14 +439,17 @@ export function SearchScreen() {
         ) : null}
 
         {showingResults ? (
-          loading ? (
+          loading || (searchCenter !== null && !ready && !error) ? (
             <div className="space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+                Finding nearby parking…
+              </p>
               <Skeleton className="h-24 w-full" />
               <Skeleton className="h-24 w-full" />
             </div>
           ) : error ? (
             <EmptyState
-              title="Couldn't load parking"
+              title="Parking couldn't be loaded"
               description={error}
               action={
                 <button
@@ -424,19 +457,35 @@ export function SearchScreen() {
                   onClick={reload}
                   className="rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-on-ink"
                 >
-                  Retry
+                  Try again
                 </button>
+              }
+            />
+          ) : searchCenter === null ? (
+            /* No destination and no location: we have no honest centre to
+               search around, so we ask rather than inventing one. */
+            <EmptyState
+              title="Choose a destination"
+              description="Search for where you're going, or turn on location, to see parking nearby."
+              action={
+                <Button size="md" onClick={() => geo.request()}>
+                  Enable Location
+                </Button>
               }
             />
           ) : results.length === 0 && suggestions.length === 0 ? (
             <EmptyState
-              title="No parking found"
+              title="No parking available"
               description={
                 filtersActive
                   ? 'No spaces match these filters. Try clearing them.'
                   : query.trim()
-                    ? `Nothing matches “${query}”.`
-                    : 'No parking near this destination yet.'
+                    ? `Nothing matches “${query}” within ${
+                        radius / 1000
+                      } km.`
+                    : `We couldn't find an available parking space within ${
+                        radius / 1000
+                      } km of ${dest ? dest.name : 'your location'}.`
               }
               action={
                 filtersActive ? (
@@ -452,7 +501,23 @@ export function SearchScreen() {
                   >
                     Clear filters
                   </Button>
-                ) : undefined
+                ) : radius < WIDER_RADIUS_M ? (
+                  /* Widening is an explicit driver choice, never silent. */
+                  <Button
+                    size="md"
+                    onClick={() => setRadius(WIDER_RADIUS_M)}
+                  >
+                    Search up to {WIDER_RADIUS_M / 1000} km
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={() => navigate('/search')}
+                  >
+                    Change destination
+                  </Button>
+                )
               }
             />
           ) : (
@@ -518,13 +583,13 @@ export function SearchScreen() {
                     ) : null}
                   </div>
 
-                  {ordered.map(({ space, distanceKm }) => {
+                  {ordered.map((space) => {
                     const leg = walkLegs[space.id]
                     return (
                       <ParkingCard
                         key={space.id}
                         space={space}
-                        distanceKm={dest ? null : distanceKm}
+                        distanceKm={dest ? null : space.distance_m / 1000}
                         onSelect={openDetail}
                         badge={
                           pickId === space.id ? '✦ ParkPilot Pick' : null
@@ -627,7 +692,11 @@ export function SearchScreen() {
         allowCustom={sheet ? sheetConfig[sheet].allowCustom : false}
         customValue={sheet ? sheetConfig[sheet].customValue : ''}
         submitting={geocoding}
-        onClose={() => setSheet(null)}
+        error={geocodeError}
+        onClose={() => {
+          setGeocodeError(null)
+          setSheet(null)
+        }}
         onSelect={handleSelect}
         onCustomSubmit={(address) => void handleCustomSubmit(address)}
       />
