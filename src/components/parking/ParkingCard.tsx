@@ -20,6 +20,12 @@ interface ParkingCardProps {
   walkSlot?: ReactNode
   /** Optional recommendation badge, e.g. ParkPilot Pick. */
   badge?: ReactNode
+  /**
+   * Latest end of a reservation covering right now, from the database. Null
+   * means the space is free this moment. We only ever state what we know, so
+   * nothing is shown when the space is free rather than a blanket "Available".
+   */
+  busyUntil?: string | null
 }
 
 export function ParkingCard({
@@ -30,8 +36,16 @@ export function ParkingCard({
   compact = false,
   walkSlot = null,
   badge = null,
+  busyUntil = null,
 }: ParkingCardProps) {
   const [saved, setSaved] = useState(() => isSaved(space.id))
+
+  const busyLabel = busyUntil
+    ? `Booked until ${new Date(busyUntil).toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })}`
+    : null
 
   if (compact) {
     return (
@@ -78,6 +92,11 @@ export function ParkingCard({
             <StatusPill className="px-2 py-0.5 text-[10px]">
               {parkingTypeLabel(space.parking_type)}
             </StatusPill>
+            {busyLabel ? (
+              <StatusPill tone="warning" className="px-2 py-0.5 text-[10px]">
+                {busyLabel}
+              </StatusPill>
+            ) : null}
             {space.ev_charging ? (
               <StatusPill tone="success" className="px-2 py-0.5 text-[10px]">
                 EV
@@ -163,6 +182,7 @@ export function ParkingCard({
 
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <StatusPill>{parkingTypeLabel(space.parking_type)}</StatusPill>
+          {busyLabel ? <StatusPill tone="warning">{busyLabel}</StatusPill> : null}
           {space.covered ? <StatusPill>Covered</StatusPill> : null}
           {space.ev_charging ? <StatusPill tone="success">EV</StatusPill> : null}
           {space.accessible ? <StatusPill>Accessible</StatusPill> : null}

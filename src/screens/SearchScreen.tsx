@@ -590,6 +590,7 @@ export function SearchScreen() {
                         key={space.id}
                         space={space}
                         distanceKm={dest ? null : space.distance_m / 1000}
+                        busyUntil={space.busy_until}
                         onSelect={openDetail}
                         badge={
                           pickId === space.id ? '✦ ParkPilot Pick' : null

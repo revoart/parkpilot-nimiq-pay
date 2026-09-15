@@ -224,6 +224,7 @@ export function HomeScreen() {
             <ParkingCard
               space={selected}
               featured
+              busyUntil={selected.busy_until}
               onSelect={(space) => navigate(`/parking/${space.id}`)}
             />
             <div className="mt-2.5">
@@ -306,6 +307,7 @@ export function HomeScreen() {
                           compact
                           space={space}
                           distanceKm={space.distance_m / 1000}
+                          busyUntil={space.busy_until}
                           onSelect={(item) => navigate(`/parking/${item.id}`)}
                         />
                       </div>
