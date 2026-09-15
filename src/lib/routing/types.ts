@@ -3,6 +3,41 @@ import type { LatLng } from '@/utils/geo'
 /** Driving and walking are the only two legs ParkPilot routes. */
 export type RouteTravelMode = 'drive' | 'walk'
 
+/** A leg of a journey. Both navigation modes use the same two. */
+export type NavigationLeg = 'drive' | 'walk'
+
+/**
+ * Which kind of journey is being navigated.
+ *
+ * `parking` drives to a parking space and then walks to the destination;
+ * `general` drives straight to the destination. Only the wording of the arrival
+ * announcement differs — the routing and guidance are identical.
+ */
+export type NavigationMode = 'parking' | 'general'
+
+/** The end of the leg being navigated. */
+export function legTarget(
+  leg: NavigationLeg,
+  driveTarget: LatLng | null,
+  walkTo: LatLng | null,
+): LatLng | null {
+  return leg === 'drive' ? driveTarget : walkTo
+}
+
+/**
+ * What to say on arrival. Only a parking journey's driving leg ends at a
+ * parking space — every other arrival is the driver's actual destination.
+ */
+export function arrivalPhrase(
+  mode: NavigationMode,
+  leg: NavigationLeg,
+): string {
+  const arrivesAtParking = mode === 'parking' && leg === 'drive'
+  return arrivesAtParking
+    ? 'You have arrived at your parking destination.'
+    : 'You have arrived at your destination.'
+}
+
 /**
  * Where a route came from. Surfaced in the UI so a straight-line estimate is
  * never presented as an exact routed distance.

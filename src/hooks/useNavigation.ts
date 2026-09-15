@@ -3,18 +3,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveLocation } from '@/hooks/useLiveLocation'
 import { useVoiceGuidance, type VoiceGuidanceResult } from '@/hooks/useVoiceGuidance'
 import {
+  arrivalPhrase,
   cumulativeDistances,
   formatTurnDistance,
   getDrivingRoute,
   getWalkRoute,
+  legTarget,
   routeProgress,
   segmentLengthMeters,
+  type NavigationLeg,
+  type NavigationMode,
   type Route,
   type RouteProgress,
 } from '@/lib/routing'
 import type { LatLng } from '@/utils/geo'
 
-export type NavigationLeg = 'drive' | 'walk'
+export type { NavigationLeg, NavigationMode }
 
 /** Explicit navigation states — no scattered booleans. */
 export type NavigationPhase =
@@ -97,12 +101,24 @@ function spokenInstruction(instruction: string): string {
   return instruction.charAt(0).toLowerCase() + instruction.slice(1)
 }
 
+/**
+ * Which kind of journey is being navigated. Only affects wording — the routing,
+ * tracking and guidance are identical.
+ */
 export interface UseNavigationOptions {
-  /** The parking space — the driving destination. */
-  parking: LatLng | null
-  /** The driver's real destination — the walking destination. */
-  destination: LatLng | null
+  /**
+   * Where the driving leg ends.
+   *
+   * A parking journey drives to the parking space; general navigation drives
+   * straight to the destination. The engine does not care which.
+   */
+  driveTarget: LatLng | null
+  /** Walking leg origin — the parking space. Parking journeys only. */
+  walkFrom?: LatLng | null
+  /** Walking leg destination. Parking journeys only. */
+  walkTo?: LatLng | null
   leg: NavigationLeg
+  mode: NavigationMode
   /** Only track and route while the navigation screen is mounted. */
   enabled: boolean
 }
@@ -138,15 +154,20 @@ export interface NavigationResult {
 /**
  * The ParkPilot navigation engine.
  *
- * Owns the route for one leg of the journey (drive → parking, or walk →
- * destination), tracks the live position, detects off-course travel and
- * arrival, and asks the voice layer to speak at sensible distances. It never
- * re-requests a route on every GPS fix.
+ * Owns the route for one leg of a journey, tracks the live position, detects
+ * off-course travel and arrival, and asks the voice layer to speak at sensible
+ * distances. It never re-requests a route on every GPS fix.
+ *
+ * Serves both parking journeys (drive to the space, then walk to the
+ * destination) and general navigation (drive straight to the destination) —
+ * the caller supplies the leg endpoints, the engine is indifferent.
  */
 export function useNavigation({
-  parking,
-  destination,
+  driveTarget,
+  walkFrom = null,
+  walkTo = null,
   leg,
+  mode,
   enabled,
 }: UseNavigationOptions): NavigationResult {
   const location = useLiveLocation()
@@ -177,12 +198,13 @@ export function useNavigation({
   const offRouteStreak = useRef(0)
   const lastRerouteAt = useRef(0)
 
-  const parkingKey = coordKey(parking, 5)
-  const destinationKey = coordKey(destination, 5)
+  const driveTargetKey = coordKey(driveTarget, 5)
+  const walkToKey = coordKey(walkTo, 5)
   const positionKey = coordKey(position, 4)
   const routingOriginKey = coordKey(routingOrigin, 4)
 
-  const target = leg === 'drive' ? parking : destination
+  /** The end of the leg being navigated right now. */
+  const target = legTarget(leg, driveTarget, walkTo)
 
   // --- Location tracking -----------------------------------------------------
   useEffect(() => {
@@ -201,14 +223,14 @@ export function useNavigation({
       return
     }
     if (leg === 'walk') {
-      setRoutingOrigin(parking)
+      setRoutingOrigin(walkFrom)
       return
     }
     if (!position) return
     // Freeze the first fix; reroutes move it explicitly.
     setRoutingOrigin((current) => current ?? position)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, leg, parkingKey, positionKey])
+  }, [enabled, leg, driveTargetKey, positionKey])
 
   // --- Build the route -------------------------------------------------------
   useEffect(() => {
@@ -267,8 +289,8 @@ export function useNavigation({
     enabled,
     leg,
     routingOriginKey,
-    parkingKey,
-    destinationKey,
+    driveTargetKey,
+    walkToKey,
     routeNonce,
   ])
 
@@ -323,12 +345,7 @@ export function useNavigation({
       distanceToTarget <= ARRIVAL_METERS[leg]
     ) {
       setPhase(leg === 'drive' ? 'arrived' : 'destination-arrived')
-      voice.speak(
-        leg === 'drive'
-          ? 'You have arrived at your parking destination.'
-          : 'You have arrived at your destination.',
-        { force: true },
-      )
+      voice.speak(arrivalPhrase(mode, leg), { force: true })
       return
     }
 
@@ -374,7 +391,7 @@ export function useNavigation({
       )
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, route, positionKey, phase, leg, parkingKey, destinationKey])
+  }, [enabled, route, positionKey, phase, leg, driveTargetKey, walkToKey])
 
   const etaSeconds = useMemo(() => {
     if (!route) return null

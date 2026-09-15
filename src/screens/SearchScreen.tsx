@@ -1,14 +1,16 @@
 import {
   Bookmark,
   Briefcase,
+  Car,
   ChevronRight,
   Clock,
   Home,
   MapPin,
+  Navigation,
   Search,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/layout/AppShell'
@@ -20,11 +22,17 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { SwipeToDelete } from '@/components/ui/SwipeToDelete'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useAddressSuggestions } from '@/hooks/useAddressSuggestions'
+import { useDrivingRoute } from '@/hooks/useDrivingRoute'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useNearbyParking } from '@/hooks/useNearbyParking'
 import { destinationQuery } from '@/hooks/useDestination'
 import { NEARBY_RADIUS_M } from '@/lib/parking'
-import { getWalkingRoutes, type WalkingLeg } from '@/lib/routing'
+import {
+  formatDistance,
+  formatDuration,
+  getWalkingRoutes,
+  type WalkingLeg,
+} from '@/lib/routing'
 import {
   addRecent,
   geocodeAddress,
@@ -74,7 +82,7 @@ export function SearchScreen() {
     const lat = Number(params.get('lat'))
     const lng = Number(params.get('lng'))
     if (name && Number.isFinite(lat) && Number.isFinite(lng)) {
-      return { name, lat, lng }
+      return { name, address: params.get('address'), lat, lng }
     }
     return null
   }, [params])
@@ -102,6 +110,15 @@ export function SearchScreen() {
     searchCenter,
     radius,
   )
+
+  /**
+   * The drive to the destination itself. This is what makes "Navigate" real
+   * without any parking involved — one traffic-aware route, not one per listing.
+   */
+  const { route: driveRoute } = useDrivingRoute(geo.coords, dest)
+
+  /** Lets "Find Parking" jump to the results rather than hiding them. */
+  const resultsRef = useRef<HTMLDivElement | null>(null)
 
   const results = useMemo(() => {
     const term = query.trim().toLowerCase()
@@ -358,14 +375,73 @@ export function SearchScreen() {
           ))}
         </div>
 
+        {/* A destination is a navigation target in its own right. Parking is a
+            separate, optional intent — the driver is never forced through it. */}
         {dest ? (
-          <div className="flex items-center gap-2 rounded-2xl bg-surface-raised px-4 py-3">
-            <MapPin className="size-4 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{dest.name}</p>
-              <p className="truncate text-xs text-ink-muted">
-                {dest.lat.toFixed(4)}, {dest.lng.toFixed(4)}
-              </p>
+          <div className="rounded-2xl bg-surface-raised p-4">
+            <div className="flex items-start gap-2">
+              <MapPin className="mt-0.5 size-4 shrink-0 text-ink-soft" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-bold">{dest.name}</p>
+                <p className="mt-0.5 truncate text-xs text-ink-muted">
+                  {dest.address ??
+                    `${dest.lat.toFixed(4)}, ${dest.lng.toFixed(4)}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface">
+                <Car className="size-4 text-ink" />
+              </span>
+              {driveRoute ? (
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-bold leading-tight">
+                    {driveRoute.source === 'estimate' ? '~' : ''}
+                    {formatDuration(driveRoute.durationSeconds)} drive
+                    {driveRoute.trafficAware ? (
+                      <span className="ml-1.5 align-middle text-[10px] font-bold uppercase tracking-[0.6px] text-success">
+                        live traffic
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    {formatDistance(driveRoute.distanceMeters)}
+                  </p>
+                </div>
+              ) : (
+                <p className="flex-1 text-[13px] text-ink-muted">
+                  {geo.coords
+                    ? 'Calculating drive time…'
+                    : 'Turn on location for drive time'}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <Button
+                size="lg"
+                className="flex-1"
+                onClick={() =>
+                  navigate(`/navigate${destinationQuery(dest)}`)
+                }
+              >
+                <Navigation className="mr-1.5 size-4" />
+                Navigate
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="flex-1"
+                onClick={() =>
+                  resultsRef.current?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                  })
+                }
+              >
+                Find Parking
+              </Button>
             </div>
           </div>
         ) : null}
@@ -556,11 +632,11 @@ export function SearchScreen() {
                 </div>
               ) : null}
 
-              {results.length > 0 ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-                      {results.length} results{dest ? ` near ${dest.name}` : ''}
+                {results.length > 0 ? (
+                  <div ref={resultsRef} className="space-y-3 scroll-mt-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+                        {results.length} results{dest ? ` near ${dest.name}` : ''}
                     </p>
                     {dest ? (
                       <div className="flex items-center gap-0.5 rounded-lg bg-surface p-0.5">
@@ -615,8 +691,8 @@ export function SearchScreen() {
                       />
                     )
                   })}
-                </>
-              ) : null}
+                  </div>
+                ) : null}
             </div>
           )
         ) : (

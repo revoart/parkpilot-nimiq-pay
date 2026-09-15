@@ -11,6 +11,7 @@ const EXPECTED_ROUTES = [
   '/',
   '/search',
   '/parking/:id',
+  '/navigate',
   '/navigate/:id',
   '/reserve/:id',
   '/payment/:id',
@@ -76,8 +77,20 @@ describe('lazy screen imports', () => {
     }
   })
 
-  it('has a lazy import for every screen route', () => {
-    const screenRoutes = routePaths().filter((path) => path !== '*')
-    expect(lazyTargets().length).toBeGreaterThanOrEqual(screenRoutes.length)
+  it('has a lazy import for every screen a route renders', () => {
+    // Two routes may legitimately share one screen (e.g. /navigate and
+    // /navigate/:id), so this checks that each rendered screen is lazily
+    // imported rather than comparing raw counts.
+    const rendered = [...source.matchAll(/element=\{<(\w+)\s*\/>\}/g)].map(
+      (match) => match[1],
+    )
+    expect(rendered.length).toBeGreaterThan(10)
+
+    const imported = lazyTargets().map((target) => target.split('/').pop())
+    for (const screen of rendered) {
+      expect(imported, `${screen} is rendered but never lazily imported`).toContain(
+        screen,
+      )
+    }
   })
 })

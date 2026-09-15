@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useDestination } from '@/hooks/useDestination'
-import { useNavigation, type NavigationPhase } from '@/hooks/useNavigation'
+import { useNavigation, type NavigationMode, type NavigationPhase } from '@/hooks/useNavigation'
 import { useTheme } from '@/hooks/useTheme'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { getParkingSpace } from '@/lib/parking'
@@ -66,8 +66,17 @@ export function NavigationScreen() {
   const destination = useDestination()
   const { theme } = useTheme()
 
+  /**
+   * Two modes share this screen.
+   *
+   * `/navigate/:id` is a parking journey — drive to the space, then walk to the
+   * destination. `/navigate` is general navigation — drive straight to the
+   * destination, with no parking involved at all.
+   */
+  const mode: NavigationMode = id ? 'parking' : 'general'
+
   const [space, setSpace] = useState<ParkingSpace | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(mode === 'parking')
   const [loadError, setLoadError] = useState<string | null>(null)
   // `?leg=walk` starts straight on the walking stage (from the pass/session).
   const [leg, setLeg] = useState<Leg>(() =>
@@ -86,14 +95,25 @@ export function NavigationScreen() {
   )
 
   const nav = useNavigation({
-    parking,
-    destination: destinationPoint,
+    // A parking journey drives to the space; general navigation drives to the
+    // destination itself. Everything else about the engine is identical.
+    driveTarget: mode === 'parking' ? parking : destinationPoint,
+    walkFrom: parking,
+    walkTo: destinationPoint,
     leg,
-    enabled: !loading && Boolean(space),
+    mode,
+    enabled:
+      mode === 'general'
+        ? Boolean(destinationPoint)
+        : !loading && Boolean(space),
   })
 
-  // Walk summary is needed for the "you've arrived, now walk" hand-off.
-  const { route: walkSummary } = useWalkingRoute(parking, destinationPoint)
+  // The walk summary is only needed for the parking journey's arrival hand-off,
+  // so general navigation never requests a walking route.
+  const { route: walkSummary } = useWalkingRoute(
+    mode === 'parking' ? parking : null,
+    mode === 'parking' ? destinationPoint : null,
+  )
 
   useEffect(() => {
     let active = true
@@ -136,7 +156,8 @@ export function NavigationScreen() {
     [space],
   )
 
-  if (loading) {
+  // General navigation has nothing to load — it goes straight to routing.
+  if (mode === 'parking' && loading) {
     return (
       <div className="absolute inset-0 flex flex-col gap-3 p-4">
         <Skeleton className="h-24 w-full" />
@@ -146,7 +167,7 @@ export function NavigationScreen() {
     )
   }
 
-  if (loadError || !space) {
+  if (mode === 'parking' && (loadError || !space)) {
     return (
       <EmptyState
         title="Parking not found"
@@ -315,49 +336,71 @@ export function NavigationScreen() {
         ) : null}
 
         {arrived ? (
-          <div className="rounded-2xl bg-surface-raised p-4 shadow-sm shadow-black/10">
-            <p className="flex items-center gap-2 text-[17px] font-bold">
-              <Flag className="size-5 text-success" />
-              You&apos;ve arrived
-            </p>
-            <p className="mt-0.5 text-[13px] text-ink-muted">
-              Parked at {space.title}
-            </p>
-
-            {destination ? (
-              <>
-                <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-surface px-3 py-2.5">
-                  <Footprints className="size-4 shrink-0 text-ink-soft" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-                    {walkTime ?? '—'} walk to {destination.name}
-                  </span>
-                  <span className="shrink-0 text-[12px] font-medium text-ink-muted">
-                    {walkDistance ?? ''}
-                  </span>
-                </div>
-                <Button
-                  full
-                  size="lg"
-                  className="mt-3"
-                  onClick={() => {
-                    setLeg('walk')
-                    setFollow(true)
-                  }}
-                >
-                  Start Walking
-                </Button>
-              </>
-            ) : (
+          mode === 'general' || !space ? (
+            /* General navigation: the destination is the end of the drive. */
+            <div className="rounded-2xl bg-surface-raised p-4 shadow-sm shadow-black/10">
+              <p className="flex items-center gap-2 text-[17px] font-bold">
+                <Flag className="size-5 text-success" />
+                You&apos;ve arrived
+              </p>
+              <p className="mt-0.5 text-[13px] text-ink-muted">
+                {destination?.name ?? 'Your destination'}
+              </p>
               <Button
                 full
                 size="lg"
                 className="mt-3"
-                onClick={() => navigate(`/pass/${space.id}`)}
+                onClick={() => navigate('/')}
               >
-                View parking pass
+                Done
               </Button>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* Parking journey: the drive ends at the space, then the walk. */
+            <div className="rounded-2xl bg-surface-raised p-4 shadow-sm shadow-black/10">
+              <p className="flex items-center gap-2 text-[17px] font-bold">
+                <Flag className="size-5 text-success" />
+                You&apos;ve arrived
+              </p>
+              <p className="mt-0.5 text-[13px] text-ink-muted">
+                Parked at {space.title}
+              </p>
+
+              {destination ? (
+                <>
+                  <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-surface px-3 py-2.5">
+                    <Footprints className="size-4 shrink-0 text-ink-soft" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+                      {walkTime ?? '—'} walk to {destination.name}
+                    </span>
+                    <span className="shrink-0 text-[12px] font-medium text-ink-muted">
+                      {walkDistance ?? ''}
+                    </span>
+                  </div>
+                  <Button
+                    full
+                    size="lg"
+                    className="mt-3"
+                    onClick={() => {
+                      setLeg('walk')
+                      setFollow(true)
+                    }}
+                  >
+                    Start Walking
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  full
+                  size="lg"
+                  className="mt-3"
+                  onClick={() => navigate(`/pass/${space.id}`)}
+                >
+                  View parking pass
+                </Button>
+              )}
+            </div>
+          )
         ) : destinationArrived ? (
           <div className="rounded-2xl bg-surface-raised p-4 shadow-sm shadow-black/10">
             <p className="flex items-center gap-2 text-[17px] font-bold">
@@ -459,7 +502,9 @@ export function NavigationScreen() {
           <p className="flex min-w-0 items-center gap-1.5 truncate rounded-xl bg-surface-raised/95 px-3 py-2 text-[11px] font-medium text-ink-muted shadow-sm shadow-black/5 backdrop-blur-sm">
             <MapPin className="size-3.5 shrink-0" />
             <span className="truncate">
-              {leg === 'drive' ? space.title : (destination?.name ?? 'Destination')}
+                {mode === 'parking' && leg === 'drive'
+                  ? (space?.title ?? 'Parking')
+                  : (destination?.name ?? 'Destination')}
             </span>
           </p>
         ) : null}

@@ -119,6 +119,7 @@ export default function App() {
                     <Route path="/" element={<HomeScreen />} />
                     <Route path="/search" element={<SearchScreen />} />
                     <Route path="/parking/:id" element={<ParkingDetailScreen />} />
+                    <Route path="/navigate" element={<NavigationScreen />} />
                     <Route path="/navigate/:id" element={<NavigationScreen />} />
                     <Route path="/reserve/:id" element={<ReserveScreen />} />
                     <Route path="/payment/:id" element={<PaymentScreen />} />
