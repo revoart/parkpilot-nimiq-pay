@@ -251,10 +251,11 @@ export function GoogleMap({
         instance.addListener('heading_changed', () => {
           const want = desiredHeading.current
           if (want === null || !vectorRef.current) return
-          // Only correct a map we know is vector. While the renderer is still
-          // coming up the type is UNINITIALIZED, and correcting then just gets
-          // discarded — which would burn the attempt budget for nothing.
-          if (instance.getRenderingType() !== 'VECTOR') return
+          // Only skip a map we know is raster. Google reports UNINITIALIZED
+          // while the vector renderer is still coming up, and in that window
+          // the map is already rotating — gating on VECTOR here made the
+          // correction dead code.
+          if (instance.getRenderingType() === 'RASTER') return
           if (Math.abs((instance.getHeading() ?? 0) - want) <= 0.5) return
           if (headingAttempts.current >= MAX_HEADING_ATTEMPTS) return
           headingAttempts.current += 1
@@ -575,7 +576,7 @@ export function GoogleMap({
       const instance = map.current
       const want = desiredHeading.current
       if (!instance || want === null) return
-      if (instance.getRenderingType() !== 'VECTOR') return
+      if (instance.getRenderingType() === 'RASTER') return
       const current = instance.getHeading() ?? 0
       if (Math.abs(current - want) <= 0.5) return
       if (headingAttempts.current >= MAX_HEADING_ATTEMPTS) return
