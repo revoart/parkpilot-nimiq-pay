@@ -418,12 +418,38 @@ unavailable" placeholder instead of crashing. The key must be allowed for every
 origin you serve from (the phone sends the LAN origin in dev), and the API needs
 billing enabled.
 
-`VITE_GOOGLE_MAPS_MAP_ID` is optional. Setting a **cloud-styled Map ID** switches
-the map to vector rendering, which is the only way to enable camera rotation
-during navigation. Without one the map is raster, camera rotation is skipped
-rather than faked, and heading is shown with the position arrow instead. Note
-that a Map ID also moves styling into Google Cloud — inline `styles` are ignored
-once it is set.
+`VITE_GOOGLE_MAPS_MAP_ID` is optional. Setting a **cloud-styled Map ID**
+(JavaScript, **Vector**) switches the map to vector rendering, which is the only
+way to enable camera rotation during navigation. Without one the map is raster,
+camera rotation is skipped rather than faked, and heading is shown with the
+position arrow instead. Note that a Map ID also moves styling into Google Cloud
+— inline `styles` are ignored once it is set, so the theme is applied through
+`colorScheme` instead.
+
+The Map ID can also be supplied at runtime — `localStorage['parkpilot.map_id']`
+or `window.__PARKPILOT_MAP_ID__` — which beats the env var. A Map ID is not a
+secret, so this makes it trivial to switch rotation on, or roll it back, without
+a rebuild.
+
+**Two things make rotation harder than it looks**, both handled in
+`GoogleMap.tsx`:
+
+- Google does not support changing the Map ID after construction, and re-sending
+  it resets the camera. Appearance options are therefore split —
+  `mapInitOptions` (construction, includes `mapId`) and `mapThemeOptions`
+  (re-theming, never includes it).
+- Google zeroes the heading while the vector renderer initialises, and changing
+  the tilt resets it too. So the tilt is left alone, and a bounded keeper
+  re-asserts the desired heading once the map is ready. It runs on a timer
+  rather than reacting to map events so it cannot become a feedback loop, and it
+  is a no-op on every screen except active navigation.
+
+An invalid or deleted Map ID falls back to the raster renderer rather than
+leaving the driver with a dead map.
+
+`VITE_DEBUG_MAP=true` exposes `window.__PARKPILOT_MAP__` and
+`window.__PARKPILOT_ROTATION__` so camera state can be asserted from automated
+checks. It is gated off by default and verified absent from production builds.
 
 Google's required attribution (the logo and "Map data ©…") is never hidden,
 covered or altered. App UI on the navigation screen deliberately stops short of
