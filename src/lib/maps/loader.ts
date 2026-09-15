@@ -13,12 +13,43 @@ const CHANNEL = import.meta.env.VITE_GOOGLE_MAPS_TRACKING_ID
  * silently ignored — so the UI must not offer it. Google's own styles are
  * ignored once a Map ID is set, because styling moves to the cloud.
  */
-export const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as
-  | string
-  | undefined
+const ENV_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined
+
+/** Where a Map ID can be supplied at runtime instead of at build time. */
+export const MAP_ID_OVERRIDE_KEY = 'parkpilot.map_id'
+
+function runtimeMapId(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const fromWindow = (window as { __PARKPILOT_MAP_ID__?: unknown })
+      .__PARKPILOT_MAP_ID__
+    if (typeof fromWindow === 'string' && fromWindow.trim()) {
+      return fromWindow.trim()
+    }
+    const fromStorage = window.localStorage.getItem(MAP_ID_OVERRIDE_KEY)
+    return fromStorage && fromStorage.trim() ? fromStorage.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The Map ID to use, if any.
+ *
+ * A runtime override beats the build-time env var. A Map ID is not a secret
+ * (it ships in the bundle and is scoped to the project), so allowing it to be
+ * set without a rebuild makes it trivial to switch rotation on — or roll it
+ * back if a Map ID turns out to be wrong.
+ */
+export function resolveMapId(): string | null {
+  const override = runtimeMapId()
+  if (override) return override
+  const value = (ENV_MAP_ID ?? '').trim()
+  return value.length > 0 ? value : null
+}
 
 export function hasMapId(): boolean {
-  return typeof MAP_ID === 'string' && MAP_ID.trim().length > 0
+  return resolveMapId() !== null
 }
 
 const LOAD_TIMEOUT_MS = 12_000

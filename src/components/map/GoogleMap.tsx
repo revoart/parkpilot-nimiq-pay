@@ -6,16 +6,16 @@ import { useTheme } from '@/hooks/useTheme'
 import {
   destinationIcon,
   dotIcon,
-  hasMapId,
   headingIcon,
   isMapsConfigured,
   loadMaps,
-  MAP_ID,
-  mapStyle,
   onMapsAuthFailure,
   pinIcon,
   priceIcon,
+  resolveMapId,
 } from '@/lib/maps/loader'
+import { mapInitOptions, mapThemeOptions, rotationFor } from '@/lib/maps/options'
+import { exposeMapDebug } from '@/lib/maps/debug'
 import { TORONTO_CENTER, type LatLng } from '@/utils/geo'
 import { cn } from '@/utils/cn'
 
@@ -115,6 +115,19 @@ export function GoogleMap({
   const destinationMarker = useRef<google.maps.Marker | null>(null)
   const walkLine = useRef<google.maps.Polyline | null>(null)
   const routeLine = useRef<google.maps.Polyline | null>(null)
+  /** True when the map is rendering vector tiles (a Map ID was accepted). */
+  const vectorRef = useRef(false)
+  /**
+   * The heading the camera should hold. Kept in a ref so the `idle` handler
+   * can re-assert it after Google internally resets it.
+   */
+  const desiredHeading = useRef<number | null>(null)
+  /**
+   * How many times we have re-asserted the current heading. Google discards a
+   * heading set while the map is still initialising, so we re-apply once the
+   * camera settles — but a hard cap stops any chance of a feedback loop.
+   */
+  const headingAttempts = useRef(0)
   const onCenterChangeRef = useRef(onCenterChange)
   const onDragStartRef = useRef(onDragStart)
   const bottomInsetRef = useRef(bottomInset)
@@ -161,28 +174,56 @@ export function GoogleMap({
       .then((maps) => {
         if (cancelled || !container.current) return
         const first = points[0]
-        const options: google.maps.MapOptions = {
-          center:
-            center ?? (first ? { lat: first.lat, lng: first.lng } : TORONTO_CENTER),
-          zoom,
-          disableDefaultUI: true,
-          gestureHandling: interactive ? 'greedy' : 'none',
-          clickableIcons: false,
+        const mapId = resolveMapId()
+
+        const create = (id: string | null): google.maps.Map => {
+          const options: google.maps.MapOptions = {
+            center:
+              center ??
+              (first ? { lat: first.lat, lng: first.lng } : TORONTO_CENTER),
+            zoom,
+            disableDefaultUI: true,
+            gestureHandling: interactive ? 'greedy' : 'none',
+            clickableIcons: false,
+            ...mapInitOptions(themeRef.current, id),
+          }
+          return new maps.Map(container.current as HTMLElement, options)
         }
-        // A Map ID switches to vector rendering and cloud styling, which is
-        // also what makes camera rotation possible. Google's inline styles are
-        // ignored in that mode, so they are only applied without one.
-        if (hasMapId() && MAP_ID) {
-          options.mapId = MAP_ID
-        } else {
-          options.styles = mapStyle(themeRef.current)
+
+        let instance: google.maps.Map
+        try {
+          instance = create(mapId)
+        } catch (error) {
+          // A wrong or deleted Map ID must not leave the driver with a dead
+          // map — fall back to the raster renderer instead.
+          if (!mapId) throw error
+          console.warn('Map ID was rejected, falling back to a raster map.', error)
+          map.current = null
+          instance = create(null)
+          vectorRef.current = false
         }
-        map.current = new maps.Map(container.current, options)
-        map.current.addListener('idle', () => {
+
+        if (mapId && instance) vectorRef.current = true
+
+        map.current = instance
+
+        // Optional debug handle (VITE_DEBUG_MAP=true) so camera state can be
+        // asserted from automated checks instead of guessed from pixels.
+        exposeMapDebug('__PARKPILOT_MAP__', instance)
+
+        // ParkPilot drives the camera; the driver pans. Rotating by accident
+        // mid-navigation would be disorienting, so the gesture is disabled.
+        // The tilt is deliberately left alone: changing it makes Google reset
+        // the heading to north.
+        if (vectorRef.current) {
+          instance.setHeadingInteractionEnabled(false)
+        }
+
+        instance.addListener('idle', () => {
           // Ignore the settle that follows our own camera moves — only the
           // user moving the map should count as "the map moved".
           if (Date.now() - lastProgrammaticMove.current < 700) return
-          const current = map.current?.getCenter()
+          const current = instance.getCenter()
           if (current) {
             onCenterChangeRef.current?.({
               lat: current.lat(),
@@ -190,7 +231,7 @@ export function GoogleMap({
             })
           }
         })
-        map.current.addListener('dragstart', () => {
+        instance.addListener('dragstart', () => {
           onDragStartRef.current?.()
         })
         setReady(true)
@@ -208,16 +249,20 @@ export function GoogleMap({
       destinationMarker.current = null
       walkLine.current = null
       routeLine.current = null
+      vectorRef.current = false
       map.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Re-paint the map when the app theme changes.
+  // Re-paint the map when the app theme changes. Vector maps take a colour
+  // scheme (their styling lives in the cloud); raster maps take inline styles.
+  // The Map ID is deliberately not re-sent — that would reset the camera.
   useEffect(() => {
     if (!ready) return
-    if (hasMapId() && MAP_ID) return
-    map.current?.setOptions({ styles: mapStyle(theme) })
+    map.current?.setOptions(
+      mapThemeOptions(theme, vectorRef.current ? resolveMapId() : null),
+    )
   }, [ready, theme])
 
   // Keep markers in sync on every render.
@@ -468,11 +513,50 @@ export function GoogleMap({
     instance.panTo({ lat: meLat, lng: meLng })
   }, [ready, follow, meLat, meLng, followZoom])
 
-  // Camera rotation needs a vector Map ID; without one this is a no-op.
+  // Rotate the camera to the direction of travel. Only meaningful on a vector
+  // map — a raster map silently ignores `setHeading`, so it is gated rather
+  // than faked.
   useEffect(() => {
-    if (!ready || !hasMapId() || heading === null) return
-    map.current?.setHeading(heading)
+    if (!ready) return
+    const mapId = vectorRef.current ? resolveMapId() : null
+    const rotation = rotationFor(heading, mapId)
+    const instance = map.current
+    if (desiredHeading.current !== rotation) headingAttempts.current = 0
+    desiredHeading.current = rotation
+    if (rotation === null || !instance) return
+    exposeMapDebug('__PARKPILOT_ROTATION__', {
+      heading,
+      vector: vectorRef.current,
+      mapId,
+      rotation,
+      renderingType: instance.getRenderingType(),
+    })
+    instance.setHeading(rotation)
   }, [ready, heading])
+
+  /**
+   * Keep the camera rotated while a heading is wanted.
+   *
+   * Google discards a heading applied while the vector map is still coming up,
+   * so this re-asserts it. It runs on a timer rather than reacting to map
+   * events precisely so it can never become a feedback loop — at most one
+   * `setHeading` per tick — and it is a no-op when no heading is wanted, which
+   * is every screen except active navigation.
+   */
+  useEffect(() => {
+    if (!ready) return
+    const id = window.setInterval(() => {
+      const instance = map.current
+      const want = desiredHeading.current
+      if (!instance || want === null) return
+      if (instance.getRenderingType() === 'RASTER') return
+      const current = instance.getHeading() ?? 0
+      if (Math.abs(current - want) <= 0.5) return
+      headingAttempts.current += 1
+      instance.setHeading(want)
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [ready])
 
   if (failed) {
     return (
