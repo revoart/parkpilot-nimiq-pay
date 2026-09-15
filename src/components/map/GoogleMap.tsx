@@ -27,6 +27,15 @@ export interface MapPoint {
   variant?: 'price' | 'pin'
 }
 
+/**
+ * Ceiling on how many times we will re-apply a heading before giving up.
+ *
+ * Google resets the heading during initialisation, so we correct it — but a
+ * hard cap means a map that simply cannot rotate (a raster renderer behind a
+ * vector Map ID) can never turn the correction into a feedback loop.
+ */
+const MAX_HEADING_ATTEMPTS = 20
+
 interface GoogleMapProps {
   points: MapPoint[]
   selectedId?: string | null
@@ -233,6 +242,23 @@ export function GoogleMap({
         })
         instance.addListener('dragstart', () => {
           onDragStartRef.current?.()
+        })
+
+        // Google zeroes the heading while the vector renderer initialises, and
+        // again whenever the tilt settles. Reacting to the map's own
+        // `heading_changed` event corrects that immediately, rather than
+        // waiting for a timer that a background tab would throttle.
+        instance.addListener('heading_changed', () => {
+          const want = desiredHeading.current
+          if (want === null || !vectorRef.current) return
+          // Only correct a map we know is vector. While the renderer is still
+          // coming up the type is UNINITIALIZED, and correcting then just gets
+          // discarded — which would burn the attempt budget for nothing.
+          if (instance.getRenderingType() !== 'VECTOR') return
+          if (Math.abs((instance.getHeading() ?? 0) - want) <= 0.5) return
+          if (headingAttempts.current >= MAX_HEADING_ATTEMPTS) return
+          headingAttempts.current += 1
+          instance.setHeading(want)
         })
         setReady(true)
       })
@@ -549,9 +575,10 @@ export function GoogleMap({
       const instance = map.current
       const want = desiredHeading.current
       if (!instance || want === null) return
-      if (instance.getRenderingType() === 'RASTER') return
+      if (instance.getRenderingType() !== 'VECTOR') return
       const current = instance.getHeading() ?? 0
       if (Math.abs(current - want) <= 0.5) return
+      if (headingAttempts.current >= MAX_HEADING_ATTEMPTS) return
       headingAttempts.current += 1
       instance.setHeading(want)
     }, 1000)
