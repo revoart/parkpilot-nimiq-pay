@@ -1,0 +1,69 @@
+project_id = "dfvpbsxlsaxdionmuhry"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[functions.create-reservation]
+verify_jwt = false
+
+[functions.verify-usdt-payment]
+verify_jwt = false
+
+[functions.get-reservation]
+verify_jwt = false
+
+[functions.list-reservations]
+verify_jwt = false
+
+[functions.wallet-challenge]
+verify_jwt = false
+
+[functions.verify-wallet-signature]
+verify_jwt = false
+
+[functions.create-parking-space]
+verify_jwt = false
+
+[functions.update-parking-space]
+verify_jwt = false
+
+[functions.list-host-spaces]
+verify_jwt = false
+
+[functions.list-host-bookings]
+verify_jwt = false
+
+[functions.host-earnings]
+verify_jwt = false
+
+[functions.delete-parking-space]
+verify_jwt = false
+
+[functions.set-availability]
+verify_jwt = false
+
+[functions.cancel-reservation]
+verify_jwt = false
+
+[functions.auth-challenge]
+verify_jwt = false
+
+[functions.auth-verify]
+verify_jwt = false
+
+[functions.get-host-wallet]
+verify_jwt = false
+
+[functions.request-payout]
+verify_jwt = false
+
+[functions.mark-payout-paid]
+verify_jwt = false

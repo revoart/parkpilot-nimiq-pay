@@ -1,0 +1,247 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&display=swap');
+@import 'tailwindcss';
+
+/* ParkPilot design tokens (light) — extracted from the ParkPilot Mobile App UI. */
+@theme {
+  --color-ink: #0f0f0f;
+  --color-ink-soft: #444444;
+  /* AA-safe: muted 6.6:1, faint 4.6:1 on white (was 3.5:1 / 1.9:1). */
+  --color-ink-muted: #5c5c5c;
+  --color-ink-faint: #767676;
+  --color-on-ink: #ffffff;
+
+  --color-canvas: #f3f3f1;
+  --color-surface: #f4f4f2;
+  --color-surface-raised: #ffffff;
+  --color-subtle: #f6f6f4;
+  --color-line: #ebebeb;
+  --color-line-strong: #e0e0e0;
+
+  --color-accent: #0f0f0f;
+  --color-accent-strong: #000000;
+  --color-accent-soft: #f4f4f2;
+
+  --color-brand: #2e6bff;
+  --color-brand-strong: #1e54d8;
+  --color-brand-fg: #ffffff;
+
+  --color-success: #15803d;
+  --color-success-bg: #dcfce7;
+  --color-warning: #b45309;
+  --color-warning-bg: #fef3c7;
+  --color-danger: #b91c1c;
+  --color-danger-bg: #fee2e2;
+  --color-star: #f59e0b;
+  --color-map: #ede9df;
+
+  --font-sans:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+
+  --radius-card: 1rem;
+  --radius-sheet: 1.75rem;
+}
+
+/* ── Dark theme ───────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-ink: #f4f4f5;
+  --color-ink-soft: #c4c4c8;
+  --color-ink-muted: #97979d;
+  /* AA-safe on the dark surfaces (was 3.5:1). */
+  --color-ink-faint: #8a8a92;
+  --color-on-ink: #0b0b0c;
+
+  --color-canvas: #0b0b0c;
+  --color-surface: #1a1a1d;
+  --color-surface-raised: #141417;
+  --color-subtle: #202024;
+  --color-line: #2a2a2f;
+  --color-line-strong: #3a3a41;
+
+  --color-accent: #f4f4f5;
+  --color-accent-strong: #ffffff;
+  --color-accent-soft: #202024;
+
+  --color-brand: #4c82ff;
+  --color-brand-strong: #6f9cff;
+  --color-brand-fg: #0b0b0c;
+
+  --color-success: #4ade80;
+  --color-success-bg: #14301f;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #3a2c0f;
+  --color-danger: #f87171;
+  --color-danger-bg: #3a1a1a;
+  --color-map: #1a1a1d;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
+}
+
+button {
+  font-family: inherit;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Accessibility ────────────────────────────────────────────────────── */
+/* Visible focus for keyboard/switch users; pointer input is unaffected. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Visually hidden, still announced by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────── */
+@keyframes screenIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes markerPop {
+  0% {
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes checkDraw {
+  from {
+    stroke-dashoffset: 60;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.screen-enter {
+  animation: screenIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sheet-enter {
+  animation: sheetUp 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.fade-in {
+  animation: fadeIn 0.3s ease both;
+}
+.marker-pop {
+  animation: markerPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.check-path {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: checkDraw 0.5s 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ── Google Maps ──────────────────────────────────────────────────────── */
+.gm-style {
+  font-family: var(--font-sans);
+}
+
+/* Keep the map container from flashing white before the tiles paint. */
+.gm-style,
+.gm-style > div {
+  background-color: var(--color-map);
+}
+
+/* Google's own controls/attribution, toned down to match the palette. */
+.gm-style .gmnoprint,
+.gm-style .gm-style-cc {
+  opacity: 0.65;
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0F0F0F" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>ParkPilot — Find parking. Pay with USDT.</title>
+    <script>
+      // Apply the saved theme before paint to avoid a flash.
+      try {
+        var stored = localStorage.getItem('parkpilot.theme')
+        var prefersDark =
+          window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (stored === 'dark' || (!stored && prefersDark)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {}
+    </script>
+    <meta
+      name="description"
+      content="ParkPilot helps you find parking and pay with USDT through Nimiq Pay."
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
