@@ -1,13 +1,12 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 
-import { normalizeAddress } from './evm.ts'
 import { getPlatformConfig, type PlatformConfig } from './ledger.ts'
 
 /**
  * Authorization and audit for the payout-sending endpoints.
  *
- * Settling a payout is allowed for the treasury wallet itself, or for any
- * wallet on the operator allow-list (which is how a multisig treasury is
+ * Settling a payout is allowed for the treasury account itself, or for any
+ * account on the operator allow-list (which is how a multisig treasury is
  * supported: the signers are operators).
  */
 export async function isAuthorizedSettler(
@@ -15,10 +14,11 @@ export async function isAuthorizedSettler(
   caller: string,
 ): Promise<{ allowed: boolean; config: PlatformConfig }> {
   const config = await getPlatformConfig(supabase)
-  const address = normalizeAddress(caller)
+  // Case-insensitive comparison, which is what Nimiq addresses need.
+  const address = caller.toLowerCase()
 
   const allowed =
-    address === normalizeAddress(config.treasuryAddress) ||
+    address === config.treasuryAddress.toLowerCase() ||
     config.operatorAddresses.includes(address)
 
   return { allowed, config }

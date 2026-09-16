@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 import { readToken, verifyToken } from '../_shared/auth.ts'
-import { isValidEvmAddress } from '../_shared/evm.ts'
+import { isValidNimiqAddress } from '../_shared/nimiq.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
@@ -36,7 +36,7 @@ Deno.serve(async (request) => {
       )
     }
 
-    if (!isValidEvmAddress(body.payout_address)) {
+    if (!isValidNimiqAddress(body.payout_address)) {
       return errorResponse(request, 'Invalid payout address.')
     }
 

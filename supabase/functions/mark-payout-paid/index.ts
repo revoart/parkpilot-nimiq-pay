@@ -62,10 +62,9 @@ Deno.serve(async (request) => {
     // The treasury address settles directly; when the treasury is a multisig
     // (e.g. a Safe) the caller is a signer, so operators are allow-listed.
     //
-    // Compared case-insensitively, which is what both EVM and Nimiq addresses
-    // need. Note the caller's identity is still an EVM address until the Nimiq
-    // identity work lands, so a Nimiq treasury will not match here — settlement
-    // is expected to come from an allow-listed operator in that case.
+    // Compared case-insensitively, which is what Nimiq addresses need. The
+    // treasury account settles directly; a multisig-style setup settles through
+    // an allow-listed operator instead.
     const callerAddress = caller.toLowerCase()
     const isTreasury =
       callerAddress === config.treasuryAddress.toLowerCase()

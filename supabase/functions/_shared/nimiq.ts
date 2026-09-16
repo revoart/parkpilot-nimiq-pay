@@ -5,7 +5,8 @@
  * and the envelope differs from a conventional JSON-RPC node — this module
  * unwraps it so callers only see `data`.
  *
- * Deliberately dependency-free (like `./evm.ts`) so it can be unit tested.
+ * Deliberately dependency-free so it can be unit tested — the crypto half of
+ * Nimiq address derivation lives in `./auth.ts`, which carries the npm imports.
  */
 
 /** Nimiq Albatross network IDs. Mainnet is 24, not the 42 used by old PoW. */

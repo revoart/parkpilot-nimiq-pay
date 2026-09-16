@@ -1,6 +1,6 @@
 ﻿import { createClient } from 'npm:@supabase/supabase-js@2'
 
-import { isValidEvmAddress } from '../_shared/evm.ts'
+import { isValidNimiqAddress } from '../_shared/nimiq.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
@@ -17,8 +17,8 @@ Deno.serve(async (request) => {
   try {
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')
-    if (!isValidEvmAddress(body.evm_address)) {
-      return errorResponse(request, 'Invalid wallet address.')
+    if (!isValidNimiqAddress(body.evm_address)) {
+      return errorResponse(request, 'Invalid Nimiq address.')
     }
 
     const supabase = createClient(

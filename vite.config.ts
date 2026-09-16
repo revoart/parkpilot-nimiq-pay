@@ -26,9 +26,6 @@ export default defineConfig({
         // can be re-downloaded without re-fetching them.
         manualChunks(id) {
           if (!id.includes('node_modules')) return
-          if (id.includes('viem') || id.includes('abitype') || id.includes('/ox/')) {
-            return 'vendor-viem'
-          }
           if (id.includes('@supabase')) return 'vendor-supabase'
           if (id.includes('react-router')) return 'vendor-router'
           if (id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler')) {

@@ -252,7 +252,7 @@ Deno.serve(async (request) => {
     }
 
     // Anything that makes the payment unrecoverable cancels the reservation so
-    // the slot frees up, exactly as the USDT verifier did.
+    // the slot frees up, rather than holding a slot the driver cannot pay for.
     const failedResponse = async (
       reason: string,
       receivedLuna?: bigint,

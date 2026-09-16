@@ -62,7 +62,7 @@ describe('splitRaw', () => {
   })
 
   it('matches the documented fee on the live payout example', () => {
-    // 111.1004 USDT gross at 10% -> 11.11004 fee, 99.99036 host.
+    // 111.1004 NIM gross at 10% -> 11.11004 fee, 99.99036 host.
     const gross = 111_100_400n
     const { hostRaw, feeRaw } = splitRaw(gross, 1000)
     expect(feeRaw).toBe(11_110_040n)

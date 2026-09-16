@@ -16,8 +16,8 @@ interface Body {
  * Driver-initiated cancellation.
  * Cancelling releases the slot automatically (the overlap exclusion constraint
  * only covers pending/confirmed rows). Paid reservations are flagged so the
- * host can refund — USDT is transferred wallet-to-wallet, so the platform
- * cannot reverse it.
+ * host can refund — the NIM has already left the driver's account, so the
+ * platform cannot reverse it.
  */
 Deno.serve(async (request) => {
   const options = preflight(request)

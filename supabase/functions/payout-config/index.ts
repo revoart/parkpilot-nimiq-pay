@@ -2,6 +2,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 import { readToken, verifyToken } from '../_shared/auth.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
+import {
+  LUNA_PER_NIM,
+  NIMIQ_MAINNET_ID,
+  resolveNimiqEndpoints,
+} from '../_shared/nimiq.ts'
 import { isAuthorizedSettler } from '../_shared/payouts.ts'
 
 /**
@@ -63,13 +68,15 @@ Deno.serve(async (request) => {
       treasury_address: config.treasuryAddress,
       operator_addresses: config.operatorAddresses,
       payouts_enabled: enabledRow?.value === true,
-      max_payout_nim: read('max_payout_nim', 100),
-      daily_payout_cap_nim: read('daily_payout_cap_nim', 500),
-      min_payout_nim: read('min_payout_nim', 1),
-      chain_id: Number(Deno.env.get('POLYGON_CHAIN_ID') ?? 137),
-      usdt_contract:
-        Deno.env.get('USDT_CONTRACT_ADDRESS') ??
-        '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+      max_payout_nim: read('max_payout_nim', 250_000),
+      daily_payout_cap_nim: read('daily_payout_cap_nim', 1_250_000),
+      min_payout_nim: read('min_payout_nim', 5_000),
+      // Nimiq is the native coin, so the signer needs a network id and RPC
+      // endpoints rather than a token contract. Nimiq Albatross mainnet is 24;
+      // the old Proof-of-Work network's 42 would be rejected by peers.
+      network_id: Number(Deno.env.get('NIMIQ_NETWORK_ID') ?? NIMIQ_MAINNET_ID),
+      luna_per_nim: Number(LUNA_PER_NIM),
+      rpc_endpoints: resolveNimiqEndpoints(),
     })
   } catch (error) {
     console.error('payout-config failed', error)
