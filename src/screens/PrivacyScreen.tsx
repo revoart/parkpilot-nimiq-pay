@@ -58,9 +58,9 @@ export function PrivacyScreen() {
         <p className="px-1 text-[13px] leading-[18px] text-ink-muted">
           ParkPilot was built for the Nimiq Mini Apps Competition. Listings,
           prices, reviews and availability all come from the live database, and
-          distances and routes are calculated from your real location. The
-          listings currently published are demo host spaces, not commercial
-          parking operators.
+          distances and routes are calculated from your real location. Every
+          listing is published by the host who owns the space, and every review
+          is written by a driver who booked it.
         </p>
       </div>
     </AppShell>

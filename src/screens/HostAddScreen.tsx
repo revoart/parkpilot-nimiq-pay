@@ -227,7 +227,7 @@ export function HostAddScreen() {
                   setAddress(event.target.value)
                   setSuppressSuggestions(false)
                 }}
-                placeholder="e.g. 42 Maple Ave, Toronto"
+                placeholder="e.g. 42 Maple Ave"
                 className="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3.5 text-[15px] outline-none placeholder:text-ink-faint"
               />
             </div>
