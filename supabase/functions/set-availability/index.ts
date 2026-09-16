@@ -15,7 +15,7 @@ interface RuleInput {
 }
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   parking_space_id?: string
   rules?: RuleInput[]
 }
@@ -78,7 +78,7 @@ Deno.serve(async (request) => {
       .from('parking_spaces')
       .select('id')
       .eq('id', body.parking_space_id)
-      .ilike('owner_evm_address', owner)
+      .ilike('owner_nimiq_address', owner)
       .maybeSingle()
 
     if (findError) throw findError

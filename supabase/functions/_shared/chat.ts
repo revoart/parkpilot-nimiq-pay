@@ -28,13 +28,13 @@ export interface Thread {
 
 interface ReservationRow {
   id: string
-  evm_address: string | null
+  nimiq_address: string | null
   status: string
   start_at: string
   end_at: string
   parking_spaces:
-    | { title: string | null; owner_evm_address: string | null; image_url: string | null }
-    | { title: string | null; owner_evm_address: string | null; image_url: string | null }[]
+    | { title: string | null; owner_nimiq_address: string | null; image_url: string | null }
+    | { title: string | null; owner_nimiq_address: string | null; image_url: string | null }[]
     | null
 }
 
@@ -60,7 +60,7 @@ export async function loadThread(
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, evm_address, status, start_at, end_at, parking_spaces ( title, owner_evm_address, image_url )',
+      'id, nimiq_address, status, start_at, end_at, parking_spaces ( title, owner_nimiq_address, image_url )',
     )
     .eq('id', reservationId)
     .maybeSingle()
@@ -69,8 +69,8 @@ export async function loadThread(
 
   const row = data as unknown as ReservationRow
   const space = one(row.parking_spaces)
-  const driverAddress = (row.evm_address ?? '').toLowerCase()
-  const hostAddress = (space?.owner_evm_address ?? '').toLowerCase()
+  const driverAddress = (row.nimiq_address ?? '').toLowerCase()
+  const hostAddress = (space?.owner_nimiq_address ?? '').toLowerCase()
 
   const isDriver = driverAddress === owner
   const isHost = hostAddress === owner
@@ -140,11 +140,11 @@ export async function loadContacts(
 
   const { data } = await supabase
     .from('profiles')
-    .select('evm_address, display_name, avatar_url, phone, phone_shared')
-    .or(unique.map((address) => `evm_address.ilike.${address}`).join(','))
+    .select('nimiq_address, display_name, avatar_url, phone, phone_shared')
+    .or(unique.map((address) => `nimiq_address.ilike.${address}`).join(','))
 
-  for (const row of (data ?? []) as (ContactRow & { evm_address: string | null })[]) {
-    const key = (row.evm_address ?? '').toLowerCase()
+  for (const row of (data ?? []) as (ContactRow & { nimiq_address: string | null })[]) {
+    const key = (row.nimiq_address ?? '').toLowerCase()
     if (!key) continue
     found.set(key, {
       display_name: row.display_name ?? null,

@@ -8,7 +8,7 @@ const UUID_RE =
 
 interface GetReservationBody {
   reservation_id?: string
-  evm_address?: string
+  nimiq_address?: string
 }
 
 /**
@@ -34,8 +34,8 @@ Deno.serve(async (request) => {
       return errorResponse(request, 'Invalid reservation_id.')
     }
     // Only the wallet that owns the reservation may read it.
-    const evm_address = await verifyToken(readToken(request, body))
-    if (!evm_address) {
+    const nimiq_address = await verifyToken(readToken(request, body))
+    if (!nimiq_address) {
       return errorResponse(
         request,
         'Sign in with your wallet to continue.',
@@ -51,7 +51,7 @@ Deno.serve(async (request) => {
     const { data: reservation, error } = await supabase
       .from('reservations')
       .select(
-        'id, parking_space_id, evm_address, nmiq_address, start_at, end_at, amount_nim, status, created_at, updated_at, recipient_address, host_amount_nim, fee_amount_nim, destination_name, destination_address, destination_lat, destination_lng, parking_spaces ( id, title, address, latitude, longitude, price_nim, payment_recipient_address, parking_type, covered, ev_charging, accessible, image_url )',
+        'id, parking_space_id, nimiq_address, start_at, end_at, amount_nim, status, created_at, updated_at, recipient_address, host_amount_nim, fee_amount_nim, destination_name, destination_address, destination_lat, destination_lng, parking_spaces ( id, title, address, latitude, longitude, price_nim, payment_recipient_address, parking_type, covered, ev_charging, accessible, image_url )',
       )
       .eq('id', reservation_id)
       .single()
@@ -61,7 +61,7 @@ Deno.serve(async (request) => {
     }
 
     if (
-      reservation.evm_address.toLowerCase() !== evm_address.toLowerCase()
+      reservation.nimiq_address.toLowerCase() !== nimiq_address.toLowerCase()
     ) {
       return errorResponse(request, 'Reservation not found.', 404)
     }

@@ -5,7 +5,7 @@ import { loadThread } from '../_shared/chat.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   auth_token?: string
   reservation_id?: string
   body?: string
@@ -61,7 +61,7 @@ Deno.serve(async (request) => {
     const { count } = await supabase
       .from('conversation_messages')
       .select('id', { count: 'exact', head: true })
-      .ilike('sender_evm_address', owner)
+      .ilike('sender_nimiq_address', owner)
       .gte('created_at', new Date(Date.now() - RATE_WINDOW_MS).toISOString())
 
     if ((count ?? 0) >= RATE_MAX) {
@@ -76,10 +76,10 @@ Deno.serve(async (request) => {
       .from('conversation_messages')
       .insert({
         reservation_id: reservationId,
-        sender_evm_address: owner,
+        sender_nimiq_address: owner,
         body: text,
       })
-      .select('id, sender_evm_address, body, created_at')
+      .select('id, sender_nimiq_address, body, created_at')
       .single()
 
     if (error) throw error
@@ -89,10 +89,10 @@ Deno.serve(async (request) => {
     await supabase.from('conversation_reads').upsert(
       {
         reservation_id: reservationId,
-        evm_address: owner,
+        nimiq_address: owner,
         last_read_at: new Date().toISOString(),
       },
-      { onConflict: 'reservation_id,evm_address' },
+      { onConflict: 'reservation_id,nimiq_address' },
     )
 
     return json(request, {

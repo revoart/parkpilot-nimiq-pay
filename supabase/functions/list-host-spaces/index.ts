@@ -4,7 +4,7 @@ import { isValidNimiqAddress } from '../_shared/nimiq.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
 }
 
 interface PaymentRow {
@@ -30,7 +30,7 @@ Deno.serve(async (request) => {
   try {
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')
-    if (!isValidNimiqAddress(body.evm_address)) {
+    if (!isValidNimiqAddress(body.nimiq_address)) {
       return errorResponse(request, 'Invalid Nimiq address.')
     }
 
@@ -39,12 +39,12 @@ Deno.serve(async (request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    const owner = body.evm_address.toLowerCase()
+    const owner = body.nimiq_address.toLowerCase()
 
     const { data: spaces, error: spaceError } = await supabase
       .from('parking_spaces')
       .select('*')
-      .ilike('owner_evm_address', owner)
+      .ilike('owner_nimiq_address', owner)
       .order('created_at', { ascending: false })
 
     if (spaceError) throw spaceError

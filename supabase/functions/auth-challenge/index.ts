@@ -30,12 +30,10 @@ Deno.serve(async (request) => {
   try {
     const body = (await request.json().catch(() => null)) as {
       nimiq_address?: string
-      /** Accepted so a client mid-upgrade still works. */
-      evm_address?: string
     } | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')
 
-    const address = body.nimiq_address ?? body.evm_address
+    const address = body.nimiq_address
     if (!isValidAddress(address)) {
       return errorResponse(request, 'Invalid Nimiq address.')
     }
@@ -53,7 +51,7 @@ Deno.serve(async (request) => {
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS).toISOString()
 
     const { error } = await supabase.from('auth_challenges').insert({
-      evm_address: nimiqIdentity(address),
+      nimiq_address: nimiqIdentity(address),
       nonce,
       expires_at: expiresAt,
     })

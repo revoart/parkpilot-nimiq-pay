@@ -10,8 +10,6 @@ import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
   nimiq_address?: string
-  /** Accepted so a client mid-upgrade still works. */
-  evm_address?: string
   nonce?: string
   issued_at?: string
   signature?: string
@@ -30,7 +28,7 @@ Deno.serve(async (request) => {
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')
 
-    const claimed = body.nimiq_address ?? body.evm_address
+    const claimed = body.nimiq_address
     if (!isValidAddress(claimed)) {
       return errorResponse(request, 'Invalid Nimiq address.')
     }
@@ -51,7 +49,7 @@ Deno.serve(async (request) => {
     const { data: challenge, error } = await supabase
       .from('auth_challenges')
       .select('id, used, expires_at')
-      .ilike('evm_address', identity)
+      .ilike('nimiq_address', identity)
       .eq('nonce', body.nonce)
       .order('created_at', { ascending: false })
       .limit(1)

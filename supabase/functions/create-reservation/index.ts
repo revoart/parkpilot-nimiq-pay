@@ -19,7 +19,6 @@ const SECONDS_PER_HOUR = 3600n
 
 interface CreateReservationBody {
   parking_space_id?: string
-  nmiq_address?: string | null
   start_at?: string
   end_at?: string
   destination_name?: string | null
@@ -54,16 +53,8 @@ Deno.serve(async (request) => {
       return errorResponse(request, 'Sign in with your wallet to continue.', 401)
     }
 
-    // The Nimiq account that will actually pay. Required: a NIM payment must
-    // come from a known address, and the verifier checks it against this.
-    if (!isValidNimiqAddress(body.nmiq_address)) {
-      return errorResponse(
-        request,
-        'Connect your Nimiq account to pay in NIM.',
-        400,
-      )
-    }
-    const nmiqAddress = normalizeNimiqAddress(body.nmiq_address)
+    // The Nimiq account that signs in is the account that pays: the identity
+    // comes from the signed token and is recorded on the reservation.
 
     const start = new Date(start_at ?? '')
     const end = new Date(end_at ?? '')
@@ -162,8 +153,7 @@ Deno.serve(async (request) => {
       .from('reservations')
       .insert({
         parking_space_id,
-        evm_address: authAddress.toLowerCase(),
-        nmiq_address: nmiqAddress,
+        nimiq_address: authAddress.toLowerCase(),
         start_at: start.toISOString(),
         end_at: end.toISOString(),
         amount_nim: amountNim,

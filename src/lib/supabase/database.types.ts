@@ -19,7 +19,7 @@ export type Database = {
           anonymous_device_id: string | null
           created_at: string
           event_name: string
-          evm_address: string | null
+          nimiq_address: string | null
           id: string
           metadata: Json | null
         }
@@ -27,7 +27,7 @@ export type Database = {
           anonymous_device_id?: string | null
           created_at?: string
           event_name: string
-          evm_address?: string | null
+          nimiq_address?: string | null
           id?: string
           metadata?: Json | null
         }
@@ -35,7 +35,7 @@ export type Database = {
           anonymous_device_id?: string | null
           created_at?: string
           event_name?: string
-          evm_address?: string | null
+          nimiq_address?: string | null
           id?: string
           metadata?: Json | null
         }
@@ -44,7 +44,7 @@ export type Database = {
       auth_challenges: {
         Row: {
           created_at: string
-          evm_address: string
+          nimiq_address: string
           expires_at: string
           id: string
           nonce: string
@@ -52,7 +52,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          evm_address: string
+          nimiq_address: string
           expires_at: string
           id?: string
           nonce: string
@@ -60,7 +60,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          evm_address?: string
+          nimiq_address?: string
           expires_at?: string
           id?: string
           nonce?: string
@@ -296,7 +296,7 @@ export type Database = {
           image_url: string | null
           latitude: number
           longitude: number
-          owner_evm_address: string | null
+          owner_nimiq_address: string | null
           parking_type: string | null
           payment_recipient_address: string
           price_nim: number
@@ -315,7 +315,7 @@ export type Database = {
           image_url?: string | null
           latitude: number
           longitude: number
-          owner_evm_address?: string | null
+          owner_nimiq_address?: string | null
           parking_type?: string | null
           payment_recipient_address: string
           price_nim: number
@@ -334,7 +334,7 @@ export type Database = {
           image_url?: string | null
           latitude?: number
           longitude?: number
-          owner_evm_address?: string | null
+          owner_nimiq_address?: string | null
           parking_type?: string | null
           payment_recipient_address?: string
           price_nim?: number
@@ -498,9 +498,8 @@ export type Database = {
           created_at: string
           display_name: string | null
           email: string | null
-          evm_address: string | null
           id: string
-          nmiq_address: string | null
+          nimiq_address: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -508,9 +507,8 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email?: string | null
-          evm_address?: string | null
           id?: string
-          nmiq_address?: string | null
+          nimiq_address?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -518,9 +516,8 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email?: string | null
-          evm_address?: string | null
           id?: string
-          nmiq_address?: string | null
+          nimiq_address?: string | null
         }
         Relationships: []
       }
@@ -533,12 +530,11 @@ export type Database = {
           destination_lng: number | null
           destination_name: string | null
           end_at: string
-          evm_address: string
           expires_at: string | null
           fee_amount_nim: number | null
           host_amount_nim: number | null
           id: string
-          nmiq_address: string | null
+          nimiq_address: string
           parking_space_id: string
           recipient_address: string | null
           start_at: string
@@ -554,12 +550,11 @@ export type Database = {
           destination_lng?: number | null
           destination_name?: string | null
           end_at: string
-          evm_address: string
           expires_at?: string | null
           fee_amount_nim?: number | null
           host_amount_nim?: number | null
           id?: string
-          nmiq_address?: string | null
+          nimiq_address: string
           parking_space_id: string
           recipient_address?: string | null
           start_at: string
@@ -575,12 +570,11 @@ export type Database = {
           destination_lng?: number | null
           destination_name?: string | null
           end_at?: string
-          evm_address?: string
           expires_at?: string | null
           fee_amount_nim?: number | null
           host_amount_nim?: number | null
           id?: string
-          nmiq_address?: string | null
+          nimiq_address?: string
           parking_space_id?: string
           recipient_address?: string | null
           start_at?: string
@@ -609,7 +603,7 @@ export type Database = {
         Row: {
           comment: string | null
           created_at: string
-          evm_address: string | null
+          nimiq_address: string | null
           id: string
           parking_space_id: string
           rating: number
@@ -618,7 +612,7 @@ export type Database = {
         Insert: {
           comment?: string | null
           created_at?: string
-          evm_address?: string | null
+          nimiq_address?: string | null
           id?: string
           parking_space_id: string
           rating: number
@@ -627,7 +621,7 @@ export type Database = {
         Update: {
           comment?: string | null
           created_at?: string
-          evm_address?: string | null
+          nimiq_address?: string | null
           id?: string
           parking_space_id?: string
           rating?: number
@@ -647,7 +641,6 @@ export type Database = {
         Row: {
           challenge: string | null
           created_at: string
-          evm_address: string | null
           id: string
           nmiq_address: string | null
           public_key: string | null
@@ -657,7 +650,6 @@ export type Database = {
         Insert: {
           challenge?: string | null
           created_at?: string
-          evm_address?: string | null
           id?: string
           nmiq_address?: string | null
           public_key?: string | null
@@ -667,7 +659,6 @@ export type Database = {
         Update: {
           challenge?: string | null
           created_at?: string
-          evm_address?: string | null
           id?: string
           nmiq_address?: string | null
           public_key?: string | null
@@ -706,7 +697,7 @@ export type Database = {
           active: boolean
           created_at: string
           updated_at: string
-          owner_evm_address: string | null
+          owner_nimiq_address: string | null
           image_url: string | null
           distance_m: number
           busy_until: string | null

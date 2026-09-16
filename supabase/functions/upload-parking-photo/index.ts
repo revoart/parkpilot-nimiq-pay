@@ -121,7 +121,7 @@ Deno.serve(async (request) => {
         .from('parking_spaces')
         .select('id, image_url')
         .eq('id', parkingSpaceId)
-        .ilike('owner_evm_address', ownerAddress)
+        .ilike('owner_nimiq_address', ownerAddress)
         .maybeSingle()
 
       if (findError) throw findError
@@ -149,7 +149,7 @@ Deno.serve(async (request) => {
         .from('parking_spaces')
         .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
         .eq('id', parkingSpaceId)
-        .ilike('owner_evm_address', ownerAddress)
+        .ilike('owner_nimiq_address', ownerAddress)
 
       if (updateError) throw updateError
 

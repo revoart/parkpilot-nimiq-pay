@@ -12,12 +12,7 @@ import type {
 
 export interface CreateReservationInput {
   parkingSpaceId: string
-  evmAddress: string
-  /**
-   * The Nimiq account that will pay. Required — the server refuses to create a
-   * reservation it cannot match a NIM payment against.
-   */
-  nmiqAddress: string
+  nimiqAddress: string
   startAt: string
   endAt: string
   /** The place the driver is heading to — persisted with the reservation. */
@@ -43,12 +38,11 @@ export async function createReservation(
   input: CreateReservationInput,
 ): Promise<CreateReservationResult> {
   const supabase = getSupabase()
-  const authToken = await requireToken(input.evmAddress)
+  const authToken = await requireToken(input.nimiqAddress)
   const { data, error } = await supabase.functions.invoke('create-reservation', {
     body: {
       parking_space_id: input.parkingSpaceId,
-      evm_address: input.evmAddress,
-      nmiq_address: input.nmiqAddress ?? null,
+      nimiq_address: input.nimiqAddress,
       start_at: input.startAt,
       end_at: input.endAt,
       destination_name: input.destination?.name ?? null,
@@ -82,8 +76,7 @@ export interface ReservationSummary {
 interface RawSummary {
   id: string
   parking_space_id: string
-  evm_address: string
-  nmiq_address: string | null
+  nimiq_address: string
   start_at: string
   end_at: string
   amount_nim: number | string
@@ -120,12 +113,12 @@ function toParkingSpace(space: Record<string, unknown>): ParkingSpace {
 }
 
 export async function listReservations(
-  evmAddress: string,
+  nimiqAddress: string,
 ): Promise<ReservationSummary[]> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('list-reservations', {
-    body: { evm_address: evmAddress, auth_token: authToken },
+    body: { nimiq_address: nimiqAddress, auth_token: authToken },
   })
 
   if (error) {
@@ -152,8 +145,7 @@ export async function listReservations(
         id: row.id,
         parking_space_id: row.parking_space_id,
         user_id: null,
-        evm_address: row.evm_address,
-        nmiq_address: row.nmiq_address,
+        nimiq_address: row.nimiq_address,
         start_at: row.start_at,
         end_at: row.end_at,
         amount_nim: Number(row.amount_nim),
@@ -185,14 +177,14 @@ export interface CancelReservationResult {
 
 /** Driver-initiated cancellation (server-validated, ownership-checked). */
 export async function cancelReservation(
-  evmAddress: string,
+  nimiqAddress: string,
   reservationId: string,
 ): Promise<CancelReservationResult> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('cancel-reservation', {
     body: {
-      evm_address: evmAddress,
+      nimiq_address: nimiqAddress,
       reservation_id: reservationId,
       auth_token: authToken,
     },
@@ -214,14 +206,14 @@ export async function cancelReservation(
 
 export async function getReservation(
   reservationId: string,
-  evmAddress: string,
+  nimiqAddress: string,
 ): Promise<ReservationDetails> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('get-reservation', {
     body: {
       reservation_id: reservationId,
-      evm_address: evmAddress,
+      nimiq_address: nimiqAddress,
       auth_token: authToken,
     },
   })

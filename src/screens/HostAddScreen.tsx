@@ -159,7 +159,7 @@ export function HostAddScreen() {
     setSubmitting(true)
     try {
       const space = await createParkingSpace({
-        evmAddress: wallet.address,
+        nimiqAddress: wallet.address,
         title: title.trim(),
         address: address.trim(),
         latitude: lat,

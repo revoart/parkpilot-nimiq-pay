@@ -386,7 +386,7 @@ export function PaymentScreen() {
 
     setPhase('sending')
     void trackEvent('payment_initiated', {
-      evmAddress: wallet.address,
+      nimiqAddress: wallet.address,
       metadata: { reservation_id: details.reservation.id },
     })
 
@@ -400,7 +400,7 @@ export function PaymentScreen() {
       setTxHash(hash)
       setPhase('submitted')
       void trackEvent('payment_submitted', {
-        evmAddress: wallet.address,
+        nimiqAddress: wallet.address,
         metadata: { reservation_id: details.reservation.id, tx_hash: hash },
       })
 
@@ -417,7 +417,7 @@ export function PaymentScreen() {
       if (result.status === 'payment_confirmed') {
         setPhase('confirmed')
         void trackEvent('payment_confirmed', {
-          evmAddress: wallet.address,
+          nimiqAddress: wallet.address,
           metadata: { reservation_id: details.reservation.id, tx_hash: hash },
         })
         navigate(`/pass/${details.reservation.id}`, { replace: true })

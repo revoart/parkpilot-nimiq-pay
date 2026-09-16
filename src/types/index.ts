@@ -74,8 +74,7 @@ export interface Reservation {
   id: string
   parking_space_id: string
   user_id: string | null
-  evm_address: string
-  nmiq_address: string | null
+  nimiq_address: string
   start_at: string
   end_at: string
   /** Total for the booking, in NIM. */
@@ -141,7 +140,6 @@ export interface Payment {
 
 export interface WalletIdentity {
   id: string
-  evm_address: string | null
   nmiq_address: string | null
   public_key: string | null
   signature: string | null
@@ -153,7 +151,7 @@ export interface WalletIdentity {
 export interface Review {
   id: string
   parking_space_id: string
-  evm_address: string | null
+  nimiq_address: string | null
   rating: number
   comment: string | null
   created_at: string
@@ -163,7 +161,7 @@ export interface AppEvent {
   id: string
   event_name: string
   anonymous_device_id: string | null
-  evm_address: string | null
+  nimiq_address: string | null
   metadata: Record<string, unknown> | null
   created_at: string
 }

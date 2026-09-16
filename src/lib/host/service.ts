@@ -39,7 +39,7 @@ export interface HostEarnings {
 }
 
 export interface CreateSpaceInput {
-  evmAddress: string
+  nimiqAddress: string
   title: string
   address: string
   latitude: number
@@ -55,7 +55,7 @@ export interface CreateSpaceInput {
 }
 
 export interface UpdateSpaceInput {
-  evmAddress: string
+  nimiqAddress: string
   id: string
   title?: string
   address?: string
@@ -100,7 +100,7 @@ export const MAX_PHOTO_BYTES = 5 * 1024 * 1024
  * listing's photo; omit it for the pre-publish upload.
  */
 export async function uploadParkingPhoto(
-  evmAddress: string,
+  nimiqAddress: string,
   file: File,
   parkingSpaceId?: string,
 ): Promise<string> {
@@ -112,7 +112,7 @@ export async function uploadParkingPhoto(
   }
 
   const { url, anonKey } = requireSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
 
   const form = new FormData()
   form.append('file', file)
@@ -137,10 +137,10 @@ export async function uploadParkingPhoto(
   return payload.image_url
 }
 
-export async function listHostSpaces(evmAddress: string): Promise<HostSpace[]> {
+export async function listHostSpaces(nimiqAddress: string): Promise<HostSpace[]> {
   const supabase = getSupabase()
   const { data, error } = await supabase.functions.invoke('list-host-spaces', {
-    body: { evm_address: evmAddress },
+    body: { nimiq_address: nimiqAddress },
   })
 
   if (error) {
@@ -165,10 +165,10 @@ export async function listHostSpaces(evmAddress: string): Promise<HostSpace[]> {
   })
 }
 
-export async function listHostBookings(evmAddress: string): Promise<HostBooking[]> {
+export async function listHostBookings(nimiqAddress: string): Promise<HostBooking[]> {
   const supabase = getSupabase()
   const { data, error } = await supabase.functions.invoke('list-host-bookings', {
-    body: { evm_address: evmAddress },
+    body: { nimiq_address: nimiqAddress },
   })
 
   if (error) {
@@ -206,11 +206,11 @@ export async function listHostBookings(evmAddress: string): Promise<HostBooking[
   })
 }
 
-export async function getHostEarnings(evmAddress: string): Promise<HostEarnings> {
+export async function getHostEarnings(nimiqAddress: string): Promise<HostEarnings> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('host-earnings', {
-    body: { evm_address: evmAddress, auth_token: authToken },
+    body: { nimiq_address: nimiqAddress, auth_token: authToken },
   })
 
   if (error) {
@@ -257,9 +257,9 @@ export interface HostWallet {
   payouts: HostPayout[]
 }
 
-export async function getHostWallet(evmAddress: string): Promise<HostWallet> {
+export async function getHostWallet(nimiqAddress: string): Promise<HostWallet> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('get-host-wallet', {
     body: { auth_token: authToken },
   })
@@ -291,12 +291,12 @@ export async function getHostWallet(evmAddress: string): Promise<HostWallet> {
 }
 
 export async function requestPayout(
-  evmAddress: string,
+  nimiqAddress: string,
   amountNim: number,
   payoutAddress: string,
 ): Promise<void> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('request-payout', {
     body: {
       amount_nim: amountNim,
@@ -321,12 +321,12 @@ export async function createParkingSpace(
   input: CreateSpaceInput,
 ): Promise<ParkingSpace> {
   const supabase = getSupabase()
-  const authToken = await requireToken(input.evmAddress)
+  const authToken = await requireToken(input.nimiqAddress)
   const { data, error } = await supabase.functions.invoke(
     'create-parking-space',
     {
       body: {
-        evm_address: input.evmAddress,
+        nimiq_address: input.nimiqAddress,
         auth_token: authToken,
         title: input.title,
         address: input.address,
@@ -359,9 +359,9 @@ export async function updateParkingSpace(
   input: UpdateSpaceInput,
 ): Promise<ParkingSpace> {
   const supabase = getSupabase()
-  const authToken = await requireToken(input.evmAddress)
+  const authToken = await requireToken(input.nimiqAddress)
   const body: Record<string, unknown> = {
-    evm_address: input.evmAddress,
+    nimiq_address: input.nimiqAddress,
     id: input.id,
     auth_token: authToken,
   }
@@ -401,15 +401,15 @@ export interface AvailabilityRuleInput {
 }
 
 export async function setAvailability(
-  evmAddress: string,
+  nimiqAddress: string,
   parkingSpaceId: string,
   rules: AvailabilityRuleInput[],
 ): Promise<void> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('set-availability', {
     body: {
-      evm_address: evmAddress,
+      nimiq_address: nimiqAddress,
       parking_space_id: parkingSpaceId,
       rules,
       auth_token: authToken,
@@ -429,14 +429,14 @@ export async function setAvailability(
 }
 
 export async function deleteParkingSpace(
-  evmAddress: string,
+  nimiqAddress: string,
   id: string,
 ): Promise<void> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke(
     'delete-parking-space',
-    { body: { evm_address: evmAddress, id, auth_token: authToken } },
+    { body: { nimiq_address: nimiqAddress, id, auth_token: authToken } },
   )
 
   if (error) {

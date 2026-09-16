@@ -146,3 +146,45 @@ describe('scanText', () => {
     expect(scanText(source)).toHaveLength(0)
   })
 })
+
+describe('false positives that made the check unusable', () => {
+  it('ignores type annotations', () => {
+    // A declaration is not a value. Flagging these would fire on any typed code.
+    expect(findSecretAssignments('function f(mnemonic: string) {}')).toHaveLength(0)
+    expect(findSecretAssignments('const opts: { mnemonic: string } = x')).toHaveLength(0)
+    expect(findSecretAssignments('private_key: string | null')).toHaveLength(0)
+    // check-secrets:allow — the detector's own test data, not a secret.
+    expect(findSecretAssignments('secret_key: number')).toHaveLength(0)
+  })
+
+  it('ignores reads from elsewhere', () => {
+    expect(findSecretAssignments('const mnemonic = readMnemonic()')).toHaveLength(0)
+    expect(findSecretAssignments('mnemonic = process.env.MNEMONIC')).toHaveLength(0)
+    expect(findSecretAssignments('privateKey = Deno.env.get("KEY")')).toHaveLength(0)
+  })
+
+  it('ignores prose in comments', () => {
+    // Documentation says "the mnemonic: string" and means nothing by it.
+    const doc = [
+      '/**',
+      ' * Derive the key pair from a mnemonic.',
+      // check-secrets:allow — the detector's own test data, not a secret.
+      ' * @param mnemonic: string the phrase',
+      ' */',
+      'function f() {}',
+    ].join('\n')
+    expect(findSecretAssignments(doc)).toHaveLength(0)
+  })
+
+  it('still reports a real assignment, even one that starts with a type word', () => {
+    // "string" is in the BIP-39 wordlist, so this must not be mistaken for a
+    // type annotation just because it begins with one.
+    // check-secrets:allow — the detector's own test data, not a secret.
+    const real = `const mnemonic = 'string abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'`
+    expect(findSecretAssignments(real)).toHaveLength(1)
+  })
+
+  it('still reports a plain mnemonic assignment', () => {
+    expect(findSecretAssignments(`const mnemonic = '${'abandon '.repeat(23)}art'`)).toHaveLength(1)
+  })
+})

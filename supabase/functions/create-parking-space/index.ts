@@ -6,7 +6,7 @@ import { errorResponse, json, preflight } from '../_shared/http.ts'
 const PARKING_TYPES = ['garage', 'underground', 'lot', 'street']
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   title?: string
   address?: string
   latitude?: number
@@ -92,7 +92,7 @@ Deno.serve(async (request) => {
         price_nim: price.toFixed(6),
         description: body.description?.trim() || null,
         payment_recipient_address: owner,
-        owner_evm_address: owner,
+        owner_nimiq_address: owner,
         parking_type: parkingType,
         covered: Boolean(body.covered),
         ev_charging: Boolean(body.ev_charging),

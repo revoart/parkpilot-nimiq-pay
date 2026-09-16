@@ -1,11 +1,11 @@
 # ParkPilot
 
-**Find parking. Pay with USDT. Park with confidence.**
+**Find parking. Pay with NIM. Park with confidence.**
 
 ParkPilot is a Nimiq Pay Mini App that makes finding and paying for parking
 simple. Drivers discover nearby parking, reserve a time window, and pay in
-**USDT on Polygon** with a single confirmation in Nimiq Pay. Every payment is
-verified on-chain by the backend before a reservation is confirmed.
+**NIM on the Nimiq chain** with a single confirmation in Nimiq Pay. Every
+payment is verified on-chain by the backend before a reservation is confirmed.
 
 Built for the **Nimiq Mini Apps Competition**.
 
@@ -14,20 +14,20 @@ Built for the **Nimiq Mini Apps Competition**.
 ## Problem
 
 Paying for parking is fragmented: apps require accounts, card details, and
-minimum spend, and the whole experience feels like a form. Meanwhile, wallets
-already hold digital dollars that could pay instantly.
+minimum spend, and the whole experience feels like a form. Meanwhile, the wallet
+you already carry holds NIM that could pay instantly.
 
 ## Solution
 
 A parking-first mini app that lives inside the wallet you already have:
 
 1. Open ParkPilot inside Nimiq Pay.
-2. Connect your wallet (EVM account).
+2. Connect your Nimiq account.
 3. Search or browse parking near you.
 4. Pick a date and time.
 5. Review the price.
-6. Pay with USDT — confirm in Nimiq Pay.
-7. The backend verifies the Polygon transaction.
+6. Pay with NIM — confirm in Nimiq Pay.
+7. The backend verifies the Nimiq transaction.
 8. Receive a confirmed parking pass.
 
 Blockchain makes the payment better, not the experience more complicated.
@@ -43,14 +43,16 @@ Blockchain makes the payment better, not the experience more complicated.
   destination, with live ETA, turn-by-turn instructions, spoken prompts and
   off-course rerouting, without leaving ParkPilot.
 - **Reservations** — date/time picker, live price breakdown, availability lock.
-- **USDT payments** — ERC-20 `transfer` encoded with viem, Polygon mainnet.
-- **On-chain verification** — backend confirms chain, token, sender, recipient,
-  amount, and receipt status before confirming.
-- **Parking pass** — confirmed pass, receipt, and Polygonscan link.
+- **NIM payments** — a native NIM transfer sent through the Nimiq provider.
+  There is no token contract and no gas token: Nimiq fees are often 0, so the
+  driver needs nothing but NIM.
+- **On-chain verification** — backend confirms the recipient, the sender, the
+  amount, the execution result and the confirmation count before confirming.
+- **Parking pass** — confirmed pass, receipt, and Nimiq explorer link.
 - **My Parking** — upcoming, active, and past reservations.
 - **Cancellation** — cancel up to 1 hour before the start time; a cancelled
-  slot is released immediately. Paid bookings are flagged as refund-owed (USDT
-  moves wallet-to-wallet, so the platform cannot reverse it automatically).
+  slot is released immediately. Paid bookings are flagged as refund-owed (NIM
+  moves account-to-account, so the platform cannot reverse it automatically).
 - **Expiry** — unpaid reservations release their slot after 15 minutes, so
   abandoned checkouts never block inventory.
 - **Find My Car** — save where you parked and walk back to it, with a real
@@ -143,16 +145,19 @@ it never auto-selects a space — the driver decides price vs walking convenienc
 
 ## Nimiq Pay integration
 
-ParkPilot uses **both** injected providers:
+ParkPilot uses the **Nimiq provider** only (`@nimiq/mini-app-sdk` → `init()`).
+It carries the whole rail:
 
-| Provider | Used for |
+| Capability | Used for |
 | --- | --- |
-| **Nimiq provider** (`@nimiq/mini-app-sdk` → `init()`) | Wallet identity: `listAccounts()` + `sign()` on a server-issued challenge |
-| **Ethereum provider** (`window.ethereum`) | Accounts, Polygon chain switch, balances, and the USDT payment |
+| `listAccounts()` | The connected Nimiq account — the app's identity |
+| `sign()` | Signing the server-issued sign-in challenge |
+| `sendBasicTransaction()` | The NIM payment itself, in Luna |
 
-Nimiq address and EVM address are treated as **separate identities** and are
-never mixed. The Nimiq signing flow is secondary and non-blocking — it can never
-break parking or payment.
+There is **no EVM wallet** anymore. `window.ethereum`, the ERC-20 helpers and
+all Polygon/USDT payment code have been removed, so there is no chain to switch
+to and no second address to reconcile. One Nimiq account is the identity and
+the payment account.
 
 When opened outside Nimiq Pay, the app shows a clear message and keeps the
 non-wallet UI usable.
@@ -164,56 +169,119 @@ non-wallet UI usable.
 Every write operation (booking, cancelling, creating/editing/deleting a
 listing, setting availability) is authorized by a **wallet signature**:
 
-1. The app requests a one-time **EIP-712 challenge** (`auth-challenge`).
-2. The user signs it in Nimiq Pay (`eth_signTypedData_v4`).
-3. `auth-verify` recovers the signer with viem and issues a short-lived
+1. The app requests a one-time **challenge** (`auth-challenge`). Nimiq Pay's
+   `sign()` takes a plain readable message rather than EIP-712 structured data,
+   so the challenge is short human-readable text naming ParkPilot.
+2. The user signs it in Nimiq Pay.
+3. `auth-verify` checks the **Ed25519** signature and issues a short-lived
    **HMAC session token** (12 h).
-4. Write calls send that token; the Edge Function derives the acting wallet
+4. Write calls send that token; the Edge Function derives the acting account
    **from the token, never from the request body**.
 
-So a caller can only act as a wallet they actually control. Challenges are
-single-use and expire after 10 minutes.
+The security-critical check is that the supplied **public key must hash to the
+address being claimed** (Blake2b-256, first 20 bytes). Without it, anyone could
+sign with their own key and present someone else's address, and the signature
+would verify perfectly. So a caller can only act as an account they actually
+control. Challenges are single-use and expire after 10 minutes.
 
-## USDT payment architecture
+## NIM payment architecture
 
-- **Chain**: Polygon mainnet (`0x89` / 137)
-- **Token**: USDT (PoS) — `0xc2132D05D31c914a87C6611C10748AEb04B58e8F`
-- **Decimals**: 6
+- **Chain**: Nimiq (Albatross mainnet, network id `24`)
+- **Coin**: NIM — the native coin, not a token
+- **Decimals**: 5 (amounts are integers in Luna; 1 NIM = 100,000 Luna)
 
-The transfer is a standard ERC-20 call:
+There is **no ERC-20, no token contract address, and no gas token**. The
+payment is a basic Nimiq transaction that moves the native coin:
 
 ```
-to:    USDT contract        (not the recipient)
-value: 0x0
-data:  transfer(recipient, amount)   // encoded with viem, bigint amounts
+to:    the ParkPilot treasury (a Nimiq NQ… address)
+value: the amount in Luna
+fee:   chosen by Nimiq Pay — often 0
 ```
+
+The driver pays the **treasury**, not the host directly. Host earnings accrue in
+an internal ledger and hosts withdraw later, which is what lets the platform
+take its fee.
 
 ### Verification flow
 
 1. `create-reservation` validates availability and inserts a **pending**
    reservation.
 2. The wallet sends the transaction; the hash is returned.
-3. `verify-usdt-payment` fetches the receipt from a Polygon RPC and checks:
-   chain, token contract, receipt success, sender, recipient, and amount.
+3. `verify-nim-payment` reads the transaction from the Nimiq chain and checks
+   the recipient, the sender, the amount, the execution result and the
+   confirmation count.
 4. Only then are the payment and reservation marked **confirmed**.
 5. Verification is **idempotent** — a transaction hash is unique and never
    processed twice.
 
-A reservation is **never** marked paid from a frontend callback alone.
+A reservation is **never** marked paid from a frontend callback alone. A
+transaction the network has not seen yet is treated as **pending**, never as
+failed, so a payment still in the mempool keeps the reservation open.
 
-> **Gas**: USDT on Polygon is not gasless. Users need a small amount of POL.
-> ParkPilot warns when the POL balance looks insufficient.
+> **Fees**: Nimiq transaction fees are often 0, so drivers need nothing but NIM.
+> There is no separate gas token to hold or check.
 
-### Free ($0.00) listings
+### Dollar equivalents
 
-`parking_spaces.price_usdt` allows `0`. A zero-total reservation is **free**:
+Prices are stored in NIM but displayed with a **USDT equivalent** beside them,
+because NIM trades around a fraction of a cent and "5000" means nothing on its
+own. The stored price stays NIM — this is a display concern only, and it never
+feeds back into what a driver pays or a host earns.
+
+The rate comes from a `nim-price` Edge Function that polls **MEXC, Gate and
+KuCoin** and takes the **median** of the three, cached for 60 seconds. The
+median is the whole robustness story: with three independent venues, one
+returning a stale or malformed price cannot move the displayed rate.
+
+CoinGecko is deliberately **not** used — its free tier rate-limits hard, and it
+carries two different "Nimiq" entries about 75x apart (`nimiq` vs `nimiq-2`).
+
+When the rate is stale (over 15 minutes) the equivalent is **hidden**, not
+guessed. A wrong dollar figure is worse than no dollar figure, because someone
+could price a space or approve a payment against it.
+
+### Free (0 NIM) listings
+
+`parking_spaces.price_nim` allows `0`. A zero-total reservation is **free**:
 `create-reservation` inserts it as `reservation_confirmed` with no payment
 window, writes no payment or ledger rows, and returns `free: true`. The app skips
 the payment screen and goes straight to the pass, so the post-reservation flow
-can be exercised without any on-chain transaction or gas.
+can be exercised without any on-chain transaction or fee.
 
-A demo row is seeded by `0010_free_test_listing.sql`
-(*"Free Test Spot (Demo)"*, Toronto).
+A host can create a zero-price listing through the normal flow if the free
+path is ever needed again. The old "Free Test Spot (Demo)" row is gone: it was
+deleted by `0021_remove_demo_catalogue.sql`, and `0010_free_test_listing.sql`
+is now intentionally empty so a rebuild cannot bring it back.
+
+---
+
+## Data model
+
+The money columns are NIM, not USDT:
+
+- `parking_spaces.price_nim`
+- `reservations.amount_nim` / `host_amount_nim` / `fee_amount_nim`
+- `payments.amount_nim` and `ledger_entries.amount_nim`
+
+Where the exact on-chain integer is needed it is kept in Luna in `amount_raw`,
+with the decimal `*_nim` column as its human-readable mirror.
+
+Identity columns are Nimiq addresses: `reservations.nimiq_address`,
+`parking_spaces.owner_nimiq_address`,
+`conversation_messages.sender_nimiq_address` — and the same rename across
+`profiles`, `reviews`, `auth_challenges` and `app_events`.
+
+Platform settings live in `platform_settings`:
+
+| Key | Meaning |
+| --- | --- |
+| `treasury_address` | The Nimiq `NQ…` address drivers pay |
+| `nimiq_network_id` | `24` on mainnet |
+| `min_payment_confirmations` | Confirmations before a payment is settled |
+| `platform_fee_bps` | Platform fee in basis points (default `1000` = 10%) |
+| `min_payout_nim` / `max_payout_nim` / `daily_payout_cap_nim` | Payout limits |
+| `payouts_enabled` | Kill switch for payout sending |
 
 ---
 
@@ -225,11 +293,13 @@ always happens in the user's wallet through the Nimiq Pay provider. That is what
 
 > **Host earnings are custodied by the platform.** Drivers pay the treasury
 > address, so accrued host earnings sit in the ParkPilot treasury wallet until a
-> payout is made. Payouts are **manual** - an operator sends them from the
-> treasury using their own wallet. This is a deliberate, documented custody
-> model, not a claim that funds never touch the platform.
+> payout is made. Payouts are **manual** - an operator runs a local script that
+> signs with the treasury key on their own machine. This is a deliberate,
+> documented custody model, not a claim that funds never touch the platform.
 
-- Drivers pay the **ParkPilot treasury** address (`platform_settings.treasury_address`).
+- Drivers pay the **ParkPilot treasury** address
+  (`platform_settings.treasury_address`, currently
+  `NQ94FAH0YLHQS40D5B2UXUDRL6XG3GYU2JEX`).
 - On verification the ledger is credited **idempotently** (unique on
   `payment_id` + `entry_type`): the host's **earning** (gross - fee) and the
   treasury's **fee**.
@@ -254,27 +324,35 @@ on the operator's machine and no deployed function can read it:
 node --env-file=.env scripts/send-payout.ts <payout_id> [--dry-run] [--resume]
 ```
 
-The script derives the account from `TREASURY_MNEMONIC_FILE` (a path, preferred)
-or `TREASURY_MNEMONIC`, signs in as that wallet, and then:
+The script reads `TREASURY_MNEMONIC_FILE` (a path, preferred) or
+`TREASURY_MNEMONIC` for the key, and `NIMIQ_RPC_ENDPOINTS` and
+`NIMIQ_NETWORK_ID` for the network. **Never** put a real key in a document. It
+derives the account from the phrase, signs in as that account, and then:
 
 1. **Asserts the key matches the treasury.** The address derived from the phrase
    must equal `platform_settings.treasury_address`, or it refuses before claiming
    anything. A wrong phrase, a wrong derivation path or a stale config is caught
-   here rather than by sending funds from an unexpected wallet.
-2. **Claims** the payout via `claim_payout_for_send`, which enforces the kill
-   switch, the per-payout and rolling-24h caps, and single-flight — in one
-   statement, so two operators cannot both take the same payout.
-3. **Checks balances** for both USDT and POL before spending a nonce.
+   here rather than by sending funds from an unexpected account.
+2. **Claims** the payout via `begin-payout-send`, which calls
+   `claim_payout_for_send` and enforces the kill switch, the per-payout and
+   rolling-24h caps, and single-flight — in one statement, so two operators
+   cannot both take the same payout.
+3. **Checks the treasury's NIM balance** before signing. Nimiq has no gas token,
+   so the balance only has to cover the payout itself.
 4. **Signs, then persists the signed transaction and its hash** via
    `record-payout-send` — *before* broadcasting.
 5. Broadcasts, waits for the receipt, and calls `mark-payout-paid`, which
    re-verifies the transfer on-chain before settling.
 
-**Step 4 is the whole point.** A signed transaction is deterministic — same
-bytes, same hash — so if the process dies between broadcasting and recording,
-`--resume` re-broadcasts the identical bytes instead of signing a fresh
-transaction and paying twice. Without it, every retry is a potential
-double-spend.
+The treasury key is derived from a **24-word** BIP-39 mnemonic. Nimiq's entropy
+is 256 bits, so a 12-word phrase cannot produce a Nimiq account at all.
+
+**Step 4 is the whole point.** A signed Nimiq transaction is deterministic —
+same bytes, same hash — so if the process dies between broadcasting and
+recording, `--resume` re-broadcasts the identical bytes instead of signing a
+fresh transaction and paying twice. Nimiq has no nonce; the equivalent guard is
+the transaction's 120-block validity window, and the network refuses an
+identical transaction it has already seen.
 
 `--dry-run` builds and signs but never broadcasts, so the path can be tested
 without spending. `fail-payout` clears a claimed payout that has no transaction
@@ -282,29 +360,32 @@ without spending. `fail-payout` clears a claimed payout that has no transaction
 written off).
 
 `mark-payout-paid` **verifies the transfer on-chain before settling**: it
-fetches the receipt and asserts the transaction succeeded and contains a USDT
-transfer from the treasury to the host's payout address for **at least** the
-payout amount. A mistyped hash, a failed transaction, a wrong recipient or an
-underpayment are all rejected, so a payout can never be marked paid in the books
-while no money moved. One transaction hash can settle **only one** payout.
+fetches the transaction and asserts it succeeded and sent NIM from the treasury
+to the host's payout address for **at least** the payout amount. A mistyped
+hash, a failed transaction, a wrong recipient or an underpayment are all
+rejected, so a payout can never be marked paid in the books while no money
+moved. One transaction hash can settle **only one** payout.
 
 Hosts can verify their own payouts: the host wallet lists each withdrawal with a
-**View transaction** link to the block explorer.
+**View transaction** link to the Nimiq explorer.
 
 #### Arming it
 
 Sending is **off by default**. `platform_settings.payouts_enabled` must be set to
 `true` before anything can be claimed, so a misconfigured deploy cannot move
-funds on its own. Caps live alongside it: `max_payout_usdt` (default 100) and
-`daily_payout_cap_usdt` (default 500).
+funds on its own. Caps live alongside it: `min_payout_nim` (default 5000),
+`max_payout_nim` (default 250000) and `daily_payout_cap_nim` (default 1250000).
+A NIM-denominated limit drifts as the rate moves, so these are worth revisiting
+before payouts are armed for real money.
 
 #### Secrets
 
 `npm run check:secrets` scans every tracked and untracked-not-ignored file for a
-BIP-39 phrase or a private key, and runs first in `npm run verify` and in CI. It
-is content-based rather than path-based on purpose: `.gitignore` only protects a
-file that happens to be named correctly, which is the assumption that fails in
-practice. A deliberate exception is marked inline with `check-secrets:allow`.
+BIP-39 phrase or a 64-hex private key, and runs first in `npm run verify` and in
+CI. It is content-based rather than path-based on purpose: `.gitignore` only
+protects a file that happens to be named correctly, which is the assumption that
+fails in practice. A deliberate exception is marked inline with
+`check-secrets:allow`.
 
 Keep the phrase **out of `.env`** — that is the file most likely to be copied
 into a build context, and this project lives under a synced folder. A file
@@ -345,9 +426,6 @@ Every active listing has **exactly one** photo. No galleries, no carousels.
   discovery, saved, host listings, the home carousel and the detail screen, with
   a subtle branded placeholder when a legacy row has no photo.
 
-Seeded demo listings are backfilled with free-license stock parking photos
-(Pexels License — free for commercial use, no attribution required).
-
 ## Account & identity
 
 `/profile` is wallet-first and shares **one identity** between Driver and Host
@@ -355,9 +433,10 @@ Seeded demo listings are backfilled with free-license stock parking photos
 `get-profile` / `update-profile` / `upload-avatar`). Changing the name, bio or
 photo in one mode updates the other.
 
-The **wallets stay separate**: Driver shows the spending wallet (USDT/POL,
-address, manage), Host shows the earnings wallet (available / pending / total
-earned + Withdraw). They are never merged or presented as one balance.
+The **views stay separate**: Driver shows the spending wallet (the NIM balance
+of the connected account, address, manage), Host shows the earnings wallet
+(available / pending / total earned + Withdraw). They are never merged or
+presented as one balance.
 
 ---
 
@@ -382,7 +461,7 @@ be probed.
 | `list-conversations` / `list-messages` / `send-message` | Edge Functions |
 
 **There is no live push, and that is a deliberate trade.** The app has no
-Supabase Auth session — it authenticates with an EIP-712 signature and an HMAC
+Supabase Auth session — it authenticates with an Ed25519 signature and an HMAC
 token — so Realtime has no JWT for RLS to authorise a private channel against,
 and a public channel would expose private messages and phone numbers. Chat
 therefore polls a cursor while the thread is open (`useChat`): 4s interval, only
@@ -438,7 +517,7 @@ Components use token classes only — never raw hex.
 | Brand text | `text-brand` | `#2e6bff` | `#4c82ff` |
 | Brand fill | `bg-brand-fill` | `#2e6bff` | `#2e6bff` |
 | Success / Warning / Danger | `*-bg` + text | `#dcfce7`/`#15803d`, `#fef3c7`/`#b45309`, `#fee2e2`/`#b91c1c` | dark equivalents |
-| Polygon | `text-polygon` | `#8247e5` | `#8247e5` |
+| Nimiq badge | `bg-brand/12` + `text-brand` | brand blue on tint | brand blue on tint |
 
 Type is **Inter** throughout: 28/800 display, 22/700, 20/800, 17/700, 15/700
 button, 14/400 body, 11/600 label, 10/800 micro. Radii: `rounded-2xl` (16px)
@@ -455,9 +534,9 @@ for cards/sheets/inputs, `rounded-xl` (12px) for buttons and inner tiles,
 | `ui/EmptyState` | dashed border, icon medallion, optional danger tone |
 | `ui/StateCard` | terminal-state card for error / success / gated presentations |
 | `parking/ParkingCard` | horizontal: 76px photo, badge row, title, `★ rating`, `Distance:` + price pill. `compact` is the vertical variant |
-| `wallet/WalletPill` | connected (Nimiq mark + address + Polygon badge + status dot), connecting (skeleton), or CONNECT WALLET |
-| `wallet/ChainBadge`, `wallet/ConnectWalletPrompt` | Polygon badge; full-screen wallet gate |
-| `brand/NimiqMark`, `brand/UsdtMark` | inline SVG marks, no network request |
+| `wallet/WalletPill` | connected (Nimiq mark + address + Nimiq badge + status dot), connecting (skeleton), or CONNECT WALLET |
+| `wallet/ChainBadge`, `wallet/ConnectWalletPrompt` | Nimiq badge; full-screen wallet gate |
+| `brand/NimiqMark` | inline SVG mark, no network request |
 
 ### Rules
 
@@ -473,7 +552,8 @@ for cards/sheets/inputs, `rounded-xl` (12px) for buttons and inner tiles,
 ## Technology stack
 
 - **Frontend**: Vite, React 19, TypeScript, Tailwind CSS v4, React Router
-- **Chain**: viem, `@nimiq/mini-app-sdk`
+- **Chain**: Nimiq, via `@nimiq/mini-app-sdk` in the client and a Nimiq JSON-RPC
+  client in the Edge Functions
 - **Map & routing**: Google Maps JavaScript API + Routes API
 - **Backend**: Supabase (Postgres, Row Level Security, Edge Functions)
 - **Icons**: Lucide
@@ -498,6 +578,9 @@ The dev server binds to all interfaces on port **5173**.
 | `npm run preview` | Preview the production build |
 | `npm run typecheck` | TypeScript only |
 | `npm run lint` | ESLint |
+| `npm run test` | Vitest (354 tests) |
+| `npm run check:secrets` | Scan the repo for mnemonics and private keys |
+| `npm run verify` | Secrets check → typecheck → lint → tests → build |
 
 ---
 
@@ -508,20 +591,17 @@ Copy `.env.example` to `.env`:
 ```bash
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
-VITE_PLATFORM_PAYMENT_ADDRESS=
-VITE_POLYGON_CHAIN_ID=0x89
-VITE_POLYGON_CHAIN_ID_DECIMAL=137
-VITE_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
-VITE_USDT_CONTRACT_ADDRESS=0xc2132D05D31c914a87C6611C10748AEb04B58e8F
-VITE_USDT_DECIMALS=6
-VITE_BLOCK_EXPLORER_URL=https://polygonscan.com
+VITE_NIMIQ_EXPLORER_URL=https://nimiq.watch
 VITE_APP_MODE=production
 VITE_GOOGLE_MAPS_API_KEY=
 VITE_GOOGLE_MAPS_TRACKING_ID=
+VITE_GOOGLE_MAPS_MAP_ID=
+VITE_DEBUG_MAP=
 ```
 
 Only `VITE_*` values reach the browser. **Never** put the Supabase service-role
-key or any private key here.
+key or any private key here. Payments are NIM on the Nimiq chain — the native
+coin — so there is no token contract and no gas token to configure.
 
 ### Google Maps
 
@@ -635,13 +715,14 @@ Set these server-side (they are never exposed to the client):
 
 ```bash
 supabase secrets set \
-  POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com \
-  USDT_CONTRACT_ADDRESS=0xc2132D05D31c914a87C6611C10748AEb04B58e8F \
-  POLYGON_CHAIN_ID=137 \
-  BLOCK_EXPLORER_URL=https://polygonscan.com \
+  NIMIQ_RPC_ENDPOINTS=https://rpc.nimiqwatch.com \
+  NIMIQ_NETWORK_ID=24 \
+  NIMIQ_EXPLORER_URL=https://nimiq.watch \
   ALLOWED_ORIGINS=https://your-app.example \
   AUTH_SECRET=<a-long-random-string>
 ```
+
+`NIMIQ_NETWORK_ID` is `24` on Nimiq Albatross mainnet (`5` on testnet).
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically to
 Edge Functions by Supabase.
@@ -654,10 +735,16 @@ Edge Functions by Supabase.
 supabase link --project-ref <your-project-ref>
 supabase db push
 supabase functions deploy \
-  create-reservation verify-usdt-payment get-reservation list-reservations \
-  cancel-reservation create-parking-space update-parking-space \
-  delete-parking-space list-host-spaces list-host-bookings host-earnings \
-  set-availability wallet-challenge verify-wallet-signature
+  auth-challenge auth-verify \
+  nim-price nim-balance \
+  create-reservation get-reservation list-reservations cancel-reservation \
+  verify-nim-payment \
+  create-parking-space update-parking-space delete-parking-space \
+  list-host-spaces list-host-bookings host-earnings set-availability \
+  request-payout payout-config begin-payout-send record-payout-send \
+  mark-payout-paid fail-payout get-host-wallet \
+  get-profile update-profile upload-avatar upload-parking-photo \
+  list-conversations list-messages send-message
 ```
 
 Migrations in `supabase/migrations/`:
@@ -666,7 +753,24 @@ Migrations in `supabase/migrations/`:
   exclusion constraint that prevents double-booking.
 - `0002_rls.sql` — public read-only catalogue, insert-only analytics, and
   deny-by-default for reservations/payments/identities.
-- `0003_seed.sql` — eight demo Toronto parking listings.
+- `0003_seed.sql` — now intentionally empty; the eight demo Toronto listings it
+  used to insert were deleted by `0021_remove_demo_catalogue.sql`.
+- `0009_treasury.sql` — platform settings, the internal ledger, host payout
+  wallets and payout requests.
+- `0010_free_test_listing.sql` — now intentionally empty; the free demo listing
+  it used to insert was removed by `0021_remove_demo_catalogue.sql`.
+- `0013_restore_seed_listings.sql` — now intentionally empty.
+- `0016_nearby_parking.sql` / `0017_listing_ratings.sql` — the radius search
+  RPC and review ratings.
+- `0018_chat_and_phone.sql` / `0019_conversation_summaries.sql` — driver ↔ host
+  chat and phone sharing.
+- `0021_remove_demo_catalogue.sql` — deletes the seeded demo listings, their
+  photos and their reviews.
+- `0022_nim_money_rail.sql` — renames the money columns to `*_nim`, sets the
+  Nimiq chain/token defaults, the treasury address and the NIM payout caps.
+- `0023_nim_price_cache.sql` — the cached NIM/USDT rate table.
+- `0024_nimiq_identity_columns.sql` — renames the identity columns to the
+  `nimiq_address`-style names.
 
 ---
 
@@ -688,8 +792,10 @@ LAN IP.
 - The frontend uses **only** the Supabase anon key.
 - Row Level Security enabled on every table; reservations and payments are
   written exclusively by Edge Functions using the service role.
-- All EVM addresses are validated with viem before encoding.
-- Chain, token contract, sender, recipient, and amount are verified on-chain.
+- Nimiq addresses are validated (checksum and alphabet) before use, and the
+  Ed25519 public key is checked to derive to the address being claimed.
+- Recipient, sender, amount, execution result and confirmations are verified
+  on-chain before a payment is confirmed.
 - Transaction hashes are unique — no duplicate reservations or double counting.
 - Double-booking is prevented by a Postgres **exclusion constraint**, and
   abandoned unpaid reservations expire after 15 minutes.
@@ -714,9 +820,9 @@ the deployed origin.
 
 ## Hackathon submission
 
-- **Product**: ParkPilot — find parking, pay with USDT through Nimiq Pay.
+- **Product**: ParkPilot — find parking, pay with NIM through Nimiq Pay.
 - **Category**: Nimiq Pay Mini App.
-- **Network**: Polygon mainnet.
+- **Network**: Nimiq mainnet (Albatross).
 - **License**: MIT.
 - **Demo flow**: connect → search → reserve → pay → verified → parking pass.
 

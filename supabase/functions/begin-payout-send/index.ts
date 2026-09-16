@@ -8,7 +8,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   auth_token?: string
   payout_id?: string
 }

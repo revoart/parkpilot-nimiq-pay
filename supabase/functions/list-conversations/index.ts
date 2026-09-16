@@ -5,7 +5,7 @@ import { contactFor, loadContacts, type Thread } from '../_shared/chat.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   auth_token?: string
 }
 

@@ -18,7 +18,7 @@ export type AppEventName =
   | 'app_error'
 
 interface TrackOptions {
-  evmAddress?: string | null
+  nimiqAddress?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -59,7 +59,7 @@ export async function trackEvent(
     await supabase.from('app_events').insert({
       event_name: name,
       anonymous_device_id: getAnonymousDeviceId(),
-      evm_address: options.evmAddress ?? null,
+      nimiq_address: options.nimiqAddress ?? null,
       metadata: (options.metadata ?? {}) as Json,
     })
   } catch {

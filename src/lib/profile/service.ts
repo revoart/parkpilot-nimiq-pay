@@ -8,7 +8,7 @@ export interface Profile {
   display_name: string | null
   bio: string | null
   avatar_url: string | null
-  evm_address: string
+  nimiq_address: string
   /** Your own number, shown to you whether or not you share it. */
   phone: string | null
   /** Whether a booking counterparty may see the number. Off by default. */
@@ -23,17 +23,17 @@ function normalize(row: Record<string, unknown> | undefined): Profile {
     display_name: (row?.display_name as string | null) ?? null,
     bio: (row?.bio as string | null) ?? null,
     avatar_url: (row?.avatar_url as string | null) ?? null,
-    evm_address: String(row?.evm_address ?? ''),
+    nimiq_address: String(row?.nimiq_address ?? ''),
     phone: (row?.phone as string | null) ?? null,
     phone_shared: Boolean(row?.phone_shared),
   }
 }
 
-export async function getProfile(evmAddress: string): Promise<Profile> {
+export async function getProfile(nimiqAddress: string): Promise<Profile> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('get-profile', {
-    body: { evm_address: evmAddress, auth_token: authToken },
+    body: { nimiq_address: nimiqAddress, auth_token: authToken },
   })
 
   if (error) {
@@ -49,7 +49,7 @@ export async function getProfile(evmAddress: string): Promise<Profile> {
 }
 
 export async function updateProfile(
-  evmAddress: string,
+  nimiqAddress: string,
   input: {
     displayName?: string | null
     bio?: string | null
@@ -59,10 +59,10 @@ export async function updateProfile(
   },
 ): Promise<Profile> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
 
   const body: Record<string, unknown> = {
-    evm_address: evmAddress,
+    nimiq_address: nimiqAddress,
     auth_token: authToken,
   }
   if (input.displayName !== undefined) body.display_name = input.displayName
@@ -89,7 +89,7 @@ export async function updateProfile(
 
 /** Uploads the profile photo; returns its public URL (not yet persisted). */
 export async function uploadAvatar(
-  evmAddress: string,
+  nimiqAddress: string,
   file: File,
 ): Promise<string> {
   if (!ALLOWED_AVATAR_TYPES.includes(file.type.toLowerCase())) {
@@ -100,7 +100,7 @@ export async function uploadAvatar(
   }
 
   const { url, anonKey } = requireSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
 
   const form = new FormData()
   form.append('file', file)

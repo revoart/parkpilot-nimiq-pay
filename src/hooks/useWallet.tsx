@@ -104,7 +104,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAddress(account)
       storeAddress(account)
       setStatus('connected')
-      void trackEvent('wallet_connected', { evmAddress: account })
+      void trackEvent('wallet_connected', { nimiqAddress: account })
       // Sign-in is requested lazily by the first write, so connecting shows only
       // the connect prompt — never a second prompt straight after.
     } catch (err) {

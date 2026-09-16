@@ -26,7 +26,7 @@ Deno.serve(async (request) => {
 
   try {
     const body = (await request.json().catch(() => null)) as {
-      evm_address?: string
+      nimiq_address?: string
       auth_token?: string
     } | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')

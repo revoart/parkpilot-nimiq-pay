@@ -8,7 +8,7 @@ const UUID_RE =
 const PARKING_TYPES = ['garage', 'underground', 'lot', 'street']
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   id?: string
   title?: string
   address?: string
@@ -54,7 +54,7 @@ Deno.serve(async (request) => {
       .from('parking_spaces')
       .select('id, active, image_url')
       .eq('id', body.id)
-      .ilike('owner_evm_address', owner)
+      .ilike('owner_nimiq_address', owner)
       .maybeSingle()
 
     if (findError) throw findError

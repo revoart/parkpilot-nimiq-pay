@@ -31,6 +31,30 @@ export const PUBLIC_HEX_ALLOWLIST = new Set([
 /** Values that are obviously placeholders rather than real secrets. */
 const PLACEHOLDER = /^(your|my|the|xxx+|<|\.{3}|example|changeme|placeholder|todo|redacted|dummy|test)/i
 
+/**
+ * A TypeScript type annotation, not a value.
+ *
+ * `mnemonic: string`, `secret_key: string | null`, and the parameter in
+ * `deriveKeyPair(mnemonic: string)` are declarations, and flagging them would
+ * make the check unusable on any typed codebase.
+ *
+ * The trailing delimiter is what keeps this honest: a type word is only treated
+ * as a type when something syntactic follows it. A real assignment whose value
+ * merely *starts* with a type word — `mnemonic = "string abandon ..."`, and
+ * "string" is in the BIP-39 wordlist — still has a word after it, so it is
+ * still reported.
+ */
+const TYPE_ANNOTATION =
+  /^(string|number|boolean|bigint|unknown|any)(\s*\|\s*(null|undefined|string|number|boolean|bigint))*\s*([),;={|}\]]|$)/i
+
+/**
+ * A function call, not a literal.
+ *
+ * `const mnemonic = readMnemonic()` reads the secret from somewhere else — the
+ * file it came from is what should be checked, not the call site.
+ */
+const CALL_EXPRESSION = /^[A-Za-z_$][\w$.]*\s*\(/
+
 export type FindingKind = 'mnemonic' | 'private-key' | 'secret-assignment'
 
 export interface Finding {
@@ -135,6 +159,12 @@ export function findSecretAssignments(text: string): Finding[] {
     /(mnemonic|seed_?phrase|private_?key|secret_?key|treasury_?mnemonic)\s*[:=]\s*(.+)/i
 
   text.split(/\r?\n/).forEach((raw, index) => {
+    // Only code can assign a secret. Documentation routinely writes things like
+    // "the mnemonic: string" which are prose, not values — and a secret pasted
+    // into a comment is still caught by the hex and BIP-39 run checks above,
+    // which do scan comments.
+    if (/^\s*(\/\/|\/\*|\*|--)/.test(raw)) return
+
     const match = raw.match(pattern)
     if (!match) return
 
@@ -149,6 +179,10 @@ export function findSecretAssignments(text: string): Finding[] {
     if (PLACEHOLDER.test(value)) return
     // A reference to another variable (`process.env.X`) is not a secret.
     if (/^(process\.env|import\.meta|Deno\.env|\$\{|\$[A-Z_])/i.test(value)) return
+    // A type annotation (`mnemonic: string`) declares a parameter, not a value.
+    if (TYPE_ANNOTATION.test(value)) return
+    // A call (`mnemonic = readMnemonic()`) reads the secret from elsewhere.
+    if (CALL_EXPRESSION.test(value)) return
 
     findings.push({
       kind: 'secret-assignment',

@@ -8,7 +8,7 @@ const UUID_RE =
 const CANCEL_WINDOW_MS = 60 * 60_000
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   reservation_id?: string
 }
 
@@ -50,7 +50,7 @@ Deno.serve(async (request) => {
 
     const { data: reservation, error } = await supabase
       .from('reservations')
-      .select('id, evm_address, status, start_at, amount_nim')
+      .select('id, nimiq_address, status, start_at, amount_nim')
       .eq('id', body.reservation_id)
       .single()
 
@@ -58,7 +58,7 @@ Deno.serve(async (request) => {
       return errorResponse(request, 'Reservation not found.', 404)
     }
     // Ownership check (case-insensitive) — never reveal other users' rows.
-    if (reservation.evm_address.toLowerCase() !== owner) {
+    if (reservation.nimiq_address.toLowerCase() !== owner) {
       return errorResponse(request, 'Reservation not found.', 404)
     }
 

@@ -4,7 +4,7 @@ import { readToken, verifyToken } from '../_shared/auth.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   auth_token?: string
 }
 
@@ -37,9 +37,9 @@ Deno.serve(async (request) => {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'display_name, bio, avatar_url, nmiq_address, evm_address, phone, phone_shared',
+        'display_name, bio, avatar_url, nimiq_address, phone, phone_shared',
       )
-      .ilike('evm_address', owner)
+      .ilike('nimiq_address', owner)
       .maybeSingle()
 
     if (error) throw error
@@ -49,8 +49,7 @@ Deno.serve(async (request) => {
         display_name: data?.display_name ?? null,
         bio: data?.bio ?? null,
         avatar_url: data?.avatar_url ?? null,
-        nmiq_address: data?.nmiq_address ?? null,
-        evm_address: data?.evm_address ?? owner,
+        nimiq_address: data?.nimiq_address ?? owner,
         // The owner's own number, so it is returned regardless of the sharing
         // flag — they can always see and edit what they entered.
         phone: data?.phone ?? null,

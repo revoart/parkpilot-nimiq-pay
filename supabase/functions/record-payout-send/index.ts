@@ -6,16 +6,22 @@ import { isAuthorizedSettler, logPayoutEvent } from '../_shared/payouts.ts'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/
-const RAW_TX_RE = /^0x[0-9a-fA-F]+$/
+/** Nimiq hashes are 32 bytes of hex, with no 0x prefix. */
+const TX_HASH_RE = /^(0x)?[0-9a-fA-F]{64}$/
+/** A serialized Nimiq transaction, also unprefixed hex. */
+const RAW_TX_RE = /^(0x)?[0-9a-fA-F]+$/
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   auth_token?: string
   payout_id?: string
   tx_hash?: string
   raw_tx?: string
-  send_nonce?: number
+}
+
+/** Strip an optional 0x and lowercase, so one transaction has one spelling. */
+function normalizeHex(value: string): string {
+  return value.replace(/^0x/i, '').toLowerCase()
 }
 
 /**
@@ -26,6 +32,11 @@ interface Body {
  * double payment; storing the signed bytes first closes it, because a signed
  * transaction is deterministic — same bytes, same hash — so re-broadcasting is
  * a no-op rather than a second payment.
+ *
+ * Nimiq has no nonce. What replaces it is the validity window: a transaction is
+ * only eligible for 120 blocks after its `validityStartHeight`, and the network
+ * refuses an identical transaction it has already accepted. So the stored bytes
+ * are the whole replay guard.
  *
  * Idempotent: writing the same hash twice is accepted, and a different hash for
  * an already-recorded payout is rejected.
@@ -43,7 +54,7 @@ Deno.serve(async (request) => {
 
     const caller = await verifyToken(readToken(request, body))
     if (!caller) {
-      return errorResponse(request, 'Sign in with your wallet to continue.', 401)
+      return errorResponse(request, 'Sign in with your account to continue.', 401)
     }
 
     const payoutId = (body.payout_id ?? '').trim()
@@ -56,10 +67,9 @@ Deno.serve(async (request) => {
     if (!body.raw_tx || !RAW_TX_RE.test(body.raw_tx)) {
       return errorResponse(request, 'Invalid signed transaction.')
     }
-    const nonce = Number(body.send_nonce)
-    if (!Number.isInteger(nonce) || nonce < 0) {
-      return errorResponse(request, 'Invalid nonce.')
-    }
+
+    const txHash = normalizeHex(body.tx_hash)
+    const rawTx = normalizeHex(body.raw_tx)
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -80,8 +90,8 @@ Deno.serve(async (request) => {
     // Already recorded. Accept only the identical transaction, so a genuine
     // resume is a no-op while a different one is refused.
     if (payout.tx_hash) {
-      if (payout.tx_hash.toLowerCase() === body.tx_hash.toLowerCase()) {
-        return json(request, { recorded: true, already: true, tx_hash: payout.tx_hash })
+      if (normalizeHex(payout.tx_hash) === txHash) {
+        return json(request, { recorded: true, already: true, tx_hash: txHash })
       }
       return errorResponse(
         request,
@@ -100,22 +110,15 @@ Deno.serve(async (request) => {
 
     const { error } = await supabase
       .from('payouts')
-      .update({
-        tx_hash: body.tx_hash,
-        raw_tx: body.raw_tx,
-        send_nonce: nonce,
-      })
+      .update({ tx_hash: txHash, raw_tx: rawTx })
       .eq('id', payoutId)
       .is('tx_hash', null)
 
     if (error) throw error
 
-    await logPayoutEvent(supabase, payoutId, 'signed', {
-      tx_hash: body.tx_hash,
-      send_nonce: nonce,
-    })
+    await logPayoutEvent(supabase, payoutId, 'signed', { tx_hash: txHash })
 
-    return json(request, { recorded: true, tx_hash: body.tx_hash })
+    return json(request, { recorded: true, tx_hash: txHash })
   } catch (error) {
     console.error('record-payout-send failed', error)
     return errorResponse(

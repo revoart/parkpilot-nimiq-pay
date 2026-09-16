@@ -154,7 +154,7 @@ export function HostSpaceScreen() {
     setSaving(true)
     try {
       const updated = await updateParkingSpace({
-        evmAddress: wallet.address,
+        nimiqAddress: wallet.address,
         id: space.id,
         title: title.trim(),
         address: address.trim(),
@@ -182,7 +182,7 @@ export function HostSpaceScreen() {
     setSaving(true)
     try {
       const updated = await updateParkingSpace({
-        evmAddress: wallet.address,
+        nimiqAddress: wallet.address,
         id: space.id,
         active: !space.active,
       })

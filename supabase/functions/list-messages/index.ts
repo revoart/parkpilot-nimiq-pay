@@ -5,7 +5,7 @@ import { contactFor, loadContacts, loadThread } from '../_shared/chat.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   auth_token?: string
   reservation_id?: string
   /** ISO timestamp cursor — return only messages created after it. */
@@ -62,7 +62,7 @@ Deno.serve(async (request) => {
 
     let query = supabase
       .from('conversation_messages')
-      .select('id, sender_evm_address, body, created_at')
+      .select('id, sender_nimiq_address, body, created_at')
       .eq('reservation_id', reservationId)
       .order('created_at', { ascending: true })
       .limit(limit)
@@ -82,7 +82,7 @@ Deno.serve(async (request) => {
       id: row.id as string,
       body: row.body as string,
       created_at: row.created_at as string,
-      is_mine: String(row.sender_evm_address).toLowerCase() === owner,
+      is_mine: String(row.sender_nimiq_address).toLowerCase() === owner,
     }))
 
     // Reading the thread marks it read. Done after the select so the messages
@@ -92,10 +92,10 @@ Deno.serve(async (request) => {
       await supabase.from('conversation_reads').upsert(
         {
           reservation_id: reservationId,
-          evm_address: owner,
+          nimiq_address: owner,
           last_read_at: new Date().toISOString(),
         },
-        { onConflict: 'reservation_id,evm_address' },
+        { onConflict: 'reservation_id,nimiq_address' },
       )
     }
 

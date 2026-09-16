@@ -1,53 +1,65 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 
-import { keccak256 } from 'viem'
-
 import {
-  assertNotSelfSend,
-  assertTreasuryMatch,
-  decimalToRaw,
-  deriveTreasuryAccount,
-  encodeTransfer,
-  explorerTxUrl,
+  NIMIQ_MAINNET_NETWORK_ID,
+  assertTreasuryKeyPair,
+  buildSignedPayout,
+  deriveKeyPair,
 } from './lib/treasury.ts'
 
 /**
- * Sends a host payout from the treasury, using a local mnemonic.
+ * Sends a host payout from the treasury, in NIM, using a local mnemonic.
  *
- * Run by an operator, never by the server: the key stays on this machine and
- * no deployed function can read it.
+ * Run by an operator, never by the server: the key stays on this machine and no
+ * deployed function can read it.
  *
  *   node --env-file=.env scripts/send-payout.ts <payout_id> [--dry-run] [--resume]
  *
  * The order of operations is the safety property. The transaction is signed and
- * PERSISTED before it is broadcast, because a signed transaction is
+ * PERSISTED before it is broadcast, because a signed Nimiq transaction is
  * deterministic — same bytes, same hash. If this process dies after
  * broadcasting, `--resume` re-broadcasts the identical bytes instead of signing
  * a fresh transaction and paying twice.
+ *
+ * Nimiq has no nonce. A transaction is valid from its `validityStartHeight` for
+ * 120 blocks (~2 hours), and the network refuses an identical transaction it has
+ * already seen, so a re-broadcast is safe by construction.
  */
 
-const USDT_DECIMALS = 6
-const RECEIPT_TIMEOUT_MS = 120_000
 const POLL_MS = 3_000
-/** Polygon rejects priority fees below ~25 gwei, so this is a floor, not a cap. */
-const MIN_PRIORITY_WEI = 30_000_000_000n
+const CONFIRM_TIMEOUT_MS = 180_000
+/** Nimiq settles fast; two confirmations is a small, real safety margin. */
+const CONFIRMATIONS_REQUIRED = 2
 
 interface Config {
   supabaseUrl: string
-  rpcUrl: string
-  explorerBase: string
-  chainId: number
-  usdtContract: `0x${string}`
+  rpcEndpoints: string[]
+  networkId: number
+  treasuryAddress: string
+  minPayoutNim: number
+  maxPayoutNim: number
 }
 
-interface TxReceipt {
-  status: string
-  blockNumber: string
+interface Payout {
+  id: string
+  host_address: string
+  payout_address: string
+  amount_nim: number
+  resume?: boolean
+  raw_tx?: string | null
+  tx_hash?: string | null
+}
+
+interface NimiqTransaction {
+  hash: string
+  confirmations: number
+  blockNumber: number
+  executionResult: boolean
 }
 
 function fail(message: string): never {
-  console.error(`\n  ✖ ${message}\n`)
+  console.error(`\n  x ${message}\n`)
   process.exit(1)
 }
 
@@ -77,40 +89,56 @@ function readMnemonic(): string {
   )
 }
 
-function readConfig(): Config {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL?.trim()
-  if (!supabaseUrl) fail('VITE_SUPABASE_URL is not set.')
-
-  return {
-    supabaseUrl: supabaseUrl.replace(/\/$/, ''),
-    rpcUrl:
-      process.env.VITE_POLYGON_RPC_URL?.trim() ??
-      'https://polygon-bor-rpc.publicnode.com',
-    explorerBase:
-      process.env.VITE_BLOCK_EXPLORER_URL?.trim() ?? 'https://polygonscan.com',
-    chainId: Number(process.env.VITE_POLYGON_CHAIN_ID_DECIMAL ?? 137),
-    usdtContract: (process.env.VITE_USDT_CONTRACT_ADDRESS?.trim() ??
-      '0xc2132D05D31c914a87C6611C10748AEb04B58e8F') as `0x${string}`,
-  }
+function readSupabaseUrl(): string {
+  const url = process.env.VITE_SUPABASE_URL?.trim()
+  if (!url) fail('VITE_SUPABASE_URL is not set.')
+  return url.replace(/\/$/, '')
 }
 
-/* ── JSON-RPC ─────────────────────────────────────────────────────────────── */
+/* ── Nimiq JSON-RPC ───────────────────────────────────────────────────────── */
 
 let rpcId = 0
 
-async function rpc<T>(config: Config, method: string, params: unknown[]): Promise<T> {
-  const response = await fetch(config.rpcUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }),
-  })
-  const payload = (await response.json()) as {
-    result?: T
-    error?: { message?: string }
+/**
+ * Call a Nimiq RPC method, trying each endpoint until one answers.
+ *
+ * Every response is wrapped as `{ result: { data } }`, which is not the shape a
+ * conventional JSON-RPC node returns.
+ */
+async function rpc<T>(
+  config: Config,
+  method: string,
+  params: unknown[] = [],
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (const endpoint of config.rpcEndpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }),
+      })
+
+      const payload = (await response.json()) as {
+        result?: { data?: T }
+        error?: { message?: string; data?: unknown }
+      }
+
+      if (payload.error) {
+        lastError = new Error(
+          `${method}: ${payload.error.message ?? 'error'}`,
+        )
+        continue
+      }
+
+      return (payload.result?.data ?? null) as T
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
   }
-  if (payload.error) throw new Error(`${method}: ${payload.error.message}`)
-  if (payload.result === undefined) throw new Error(`${method}: no result`)
-  return payload.result
+
+  throw lastError ?? new Error(`${method} failed on every endpoint`)
 }
 
 async function callFunction<T>(
@@ -125,273 +153,229 @@ async function callFunction<T>(
   })
 
   const payload = (await response.json().catch(() => null)) as
-    | { error?: string }
+    | (T & { error?: string })
     | null
 
-  if (!response.ok) {
-    throw new Error(payload?.error ?? `${name} failed (${response.status})`)
+  if (!response.ok || !payload) {
+    throw new Error(
+      `${name} failed (${response.status}): ${payload?.error ?? 'no response'}`,
+    )
   }
-  return payload as T
+  if (payload.error) throw new Error(`${name}: ${payload.error}`)
+
+  return payload
 }
 
-/* ── Sign-in (the same EIP-712 flow the app uses) ─────────────────────────── */
-
-async function signIn(
+/**
+ * Prove we hold the treasury key, and get a session token.
+ *
+ * The backend verifies that the public key derives to the address it claims, so
+ * this can only ever produce a token for an account we actually control.
+ */
+async function authenticate(
   config: Config,
-  account: ReturnType<typeof deriveTreasuryAccount>,
+  keyPair: ReturnType<typeof deriveKeyPair>,
+  address: string,
 ): Promise<string> {
   const challenge = await callFunction<{
     nonce: string
     issued_at: string
-    typed_data: Parameters<typeof account.signTypedData>[0]
-  }>(config, 'auth-challenge', { evm_address: account.address })
+    message: string
+  }>(config, 'auth-challenge', { nimiq_address: address })
 
-  const signature = await account.signTypedData(challenge.typed_data)
+  // Sign the UTF-8 bytes of the challenge message, which is exactly what the
+  // backend verifies.
+  const signature = keyPair.sign(new TextEncoder().encode(challenge.message))
 
-  const verified = await callFunction<{ token?: string }>(config, 'auth-verify', {
-    evm_address: account.address,
+  const verified = await callFunction<{ token: string }>(config, 'auth-verify', {
+    nimiq_address: address,
     nonce: challenge.nonce,
     issued_at: challenge.issued_at,
-    signature,
+    signature: Buffer.from(signature.serialize()).toString('hex'),
+    public_key: Buffer.from(keyPair.publicKey.serialize()).toString('hex'),
   })
 
-  if (!verified.token) fail('Sign-in returned no token.')
   return verified.token
 }
 
-/* ── Main ─────────────────────────────────────────────────────────────────── */
-
-async function main() {
+async function main(): Promise<void> {
   const args = process.argv.slice(2)
-  const payoutId = args.find((arg) => !arg.startsWith('--'))
+  const payoutId = args.find((value) => !value.startsWith('--'))
   const dryRun = args.includes('--dry-run')
+  const resume = args.includes('--resume')
 
-  if (!payoutId || args.includes('--help')) {
-    console.log(
-      'usage: node --env-file=.env scripts/send-payout.ts <payout_id> [--dry-run] [--resume]',
-    )
-    process.exit(payoutId ? 0 : 1)
+  if (!payoutId) {
+    fail('Usage: send-payout.ts <payout_id> [--dry-run] [--resume]')
   }
 
-  const config = readConfig()
-  const account = deriveTreasuryAccount(readMnemonic())
+  const supabaseUrl = readSupabaseUrl()
+  const mnemonic = readMnemonic()
 
-  console.log(`\n  treasury   ${account.address}`)
-  console.log(`  payout     ${payoutId}`)
-  console.log(`  mode       ${dryRun ? 'DRY RUN — nothing will be broadcast' : 'live'}\n`)
+  // Derive first, so a bad phrase fails before any network call.
+  const keyPair = deriveKeyPair(mnemonic)
+  const treasuryAddress = keyPair.toAddress().toUserFriendlyAddress()
 
-  const token = await signIn(config, account)
-  const auth = { auth_token: token, evm_address: account.address }
+  const bootstrap: Config = {
+    supabaseUrl,
+    rpcEndpoints: (process.env.NIMIQ_RPC_ENDPOINTS?.trim() || 'https://rpc.nimiqwatch.com')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+    networkId: Number(process.env.NIMIQ_NETWORK_ID ?? NIMIQ_MAINNET_NETWORK_ID),
+    treasuryAddress,
+    minPayoutNim: 0,
+    maxPayoutNim: 0,
+  }
 
-  // 1. Confirm the key belongs to the configured treasury BEFORE claiming
-  //    anything, so a misconfigured signer never takes a payout it cannot send.
-  const platform = await callFunction<{
+  const token = await authenticate(bootstrap, keyPair, treasuryAddress)
+
+  // Everything the signer needs before it touches a key, including the treasury
+  // address to check the mnemonic against.
+  const remote = await callFunction<{
     treasury_address: string
-    payouts_enabled: boolean
-    max_payout_usdt: number
-    usdt_contract: `0x${string}`
-  }>(config, 'payout-config', auth)
+    network_id: number
+    rpc_endpoints: string[]
+    min_payout_nim: number
+    max_payout_nim: number
+  }>(bootstrap, 'payout-config', { auth_token: token })
 
-  assertTreasuryMatch(account.address, platform.treasury_address)
-  console.log(`  ✓ key matches the configured treasury`)
+  const config: Config = {
+    ...bootstrap,
+    treasuryAddress: remote.treasury_address,
+    networkId: remote.network_id,
+    rpcEndpoints:
+      remote.rpc_endpoints?.length > 0 ? remote.rpc_endpoints : bootstrap.rpcEndpoints,
+    minPayoutNim: remote.min_payout_nim,
+    maxPayoutNim: remote.max_payout_nim,
+  }
 
-  if (!platform.payouts_enabled) {
+  // Fail closed if the key does not belong to the configured treasury. Checking
+  // before claiming means a misconfigured signer never takes a payout it cannot
+  // legitimately send.
+  assertTreasuryKeyPair(keyPair, config.treasuryAddress)
+
+  console.log(`\n  treasury : ${config.treasuryAddress}`)
+  console.log(`  network  : ${config.networkId === NIMIQ_MAINNET_NETWORK_ID ? 'mainnet' : config.networkId}`)
+  console.log(`  payout   : ${payoutId}${resume ? ' (resume)' : ''}${dryRun ? ' (dry run)' : ''}\n`)
+
+  const claim = await callFunction<Payout>(config, 'begin-payout-send', {
+    payout_id: payoutId,
+    auth_token: token,
+    resume,
+  })
+
+  if (claim.resume) {
+    console.log(`  resuming a signed send: ${claim.raw_tx?.slice(0, 24)}...`)
+  } else {
     console.log(
-      `  ! payouts_enabled is false — the server will refuse to claim.\n`,
+      `  claimed ${claim.amount_nim} NIM -> ${claim.payout_address}`,
     )
   }
 
-  // 2. Claim, or pick up an interrupted send.
-  const begin = await callFunction<{
-    resume: boolean
-    payout: {
-      id: string
-      payout_address: string
-      amount_usdt: number
-      host_address: string
-    }
-    raw_tx?: string
-    tx_hash?: string
-    send_nonce?: number
-  }>(config, 'begin-payout-send', { ...auth, payout_id: payoutId })
+  if (!claim.payout_address) {
+    fail('The payout has no destination address.')
+  }
 
-  const { payout } = begin
-  assertNotSelfSend(payout.payout_address, platform.treasury_address)
+  // Preflight: the treasury must actually hold enough NIM. Nimiq has no gas
+  // token, so the balance only has to cover the payout itself.
+  const account = await rpc<{ balance: number } | null>(config, 'getAccountByAddress', [
+    config.treasuryAddress,
+  ])
+  const balance = BigInt(account?.balance ?? 0)
+  const needed = BigInt(Math.round(claim.amount_nim * 100_000))
 
-  console.log(`  ✓ ${begin.resume ? 'resuming' : 'claimed'} ${payout.amount_usdt} USDT`)
-  console.log(`    to ${payout.payout_address}`)
+  console.log(`  treasury balance: ${balance} Luna (need ${needed})`)
 
-  let serialized = begin.raw_tx as `0x${string}` | undefined
-  let hash = begin.tx_hash as `0x${string}` | undefined
+  if (balance < needed) {
+    await callFunction(config, 'fail-payout', {
+      payout_id: payoutId,
+      reason: 'The treasury does not hold enough NIM for this payout.',
+      auth_token: token,
+    })
+    fail('Treasury balance is too low. Nothing was signed or sent.')
+  }
+
+  let serialized = claim.raw_tx ?? ''
+  let hash = claim.tx_hash ?? ''
 
   if (!serialized) {
-    // 3. Pre-flight: without enough of either asset the send cannot succeed, and
-    //    finding out after signing wastes a nonce.
-    const amountRaw = decimalToRaw(payout.amount_usdt, USDT_DECIMALS)
-    const balanceData = encodeTransferBalance(account.address)
-
-    const balanceHex = await rpc<string>(config, 'eth_call', [
-      { to: platform.usdt_contract, data: balanceData },
-      'latest',
-    ])
-    const balance = BigInt(balanceHex)
-    if (balance < amountRaw) {
-      fail(
-        `Treasury holds ${formatRaw(balance)} USDT but this payout is ${payout.amount_usdt} USDT.`,
-      )
-    }
-
-    const gasPriceHex = await rpc<string>(config, 'eth_gasPrice', [])
-    const gasPrice = BigInt(gasPriceHex)
-    const priority =
-      gasPrice > MIN_PRIORITY_WEI ? gasPrice : MIN_PRIORITY_WEI
-
-    const nonceHex = await rpc<string>(config, 'eth_getTransactionCount', [
-      account.address,
-      'pending',
-    ])
-    const nonce = Number(BigInt(nonceHex))
-
-    const data = encodeTransfer(payout.payout_address, amountRaw)
-
-    const gasHex = await rpc<string>(config, 'eth_estimateGas', [
-      { from: account.address, to: platform.usdt_contract, data, value: '0x0' },
-    ])
-    // A 25% margin: estimation runs against current state and can under-report
-    // if storage changes between estimate and execution.
-    const gas = (BigInt(gasHex) * 125n) / 100n
-
-    const nativeHex = await rpc<string>(config, 'eth_getBalance', [
-      account.address,
-      'latest',
-    ])
-    const native = BigInt(nativeHex)
-    const maxFeePerGas = gasPrice * 2n
-    const worstCase = gas * maxFeePerGas
-    if (native < worstCase) {
-      fail(
-        `Treasury holds ${formatRaw(native, 18)} POL but up to ` +
-          `${formatRaw(worstCase, 18)} POL is needed for gas. Top it up.`,
-      )
-    }
-
-    serialized = await account.signTransaction({
-      chainId: config.chainId,
-      to: platform.usdt_contract,
-      data,
-      value: 0n,
-      nonce,
-      gas,
-      maxFeePerGas,
-      maxPriorityFeePerGas: priority,
-      type: 'eip1559',
+    const head = await rpc<number>(config, 'getBlockNumber', [])
+    const signed = buildSignedPayout(keyPair, {
+      sender: config.treasuryAddress,
+      recipient: claim.payout_address,
+      amountNim: String(claim.amount_nim),
+      validityStartHeight: head,
+      networkId: config.networkId,
     })
 
-    // The hash is derived from the signed bytes, so persisting both means a
-    // retry can broadcast the identical transaction rather than a new one.
-    hash = keccak256(serialized)
-    const sendNonce = nonce
-
-    console.log(`  ✓ signed  ${hash}`)
+    serialized = signed.serialized
+    hash = signed.hash
 
     if (dryRun) {
-      console.log('\n  DRY RUN — stopping before broadcast.\n')
-      console.log(`  (the payout is claimed as 'sending' and must be resumed or failed)\n`)
-      process.exit(0)
+      console.log(`\n  dry run: signed ${serialized.length / 2} bytes, hash ${hash}`)
+      console.log('  nothing was persisted or broadcast.\n')
+      return
     }
 
-    // 4. Persist BEFORE broadcasting. This is the step that makes retries safe.
+    // Persist BEFORE broadcasting. If this process dies between the two, a
+    // retry re-broadcasts these exact bytes rather than signing a new payment.
     await callFunction(config, 'record-payout-send', {
-      ...auth,
       payout_id: payoutId,
-      tx_hash: hash,
       raw_tx: serialized,
-      send_nonce: sendNonce,
+      tx_hash: hash,
+      auth_token: token,
     })
-    console.log(`  ✓ persisted before broadcast`)
-  } else {
-    console.log(`  ✓ resuming stored transaction ${hash}`)
-    if (dryRun) {
-      console.log('\n  DRY RUN — nothing broadcast.\n')
-      process.exit(0)
-    }
+    console.log(`  signed and persisted: ${hash}`)
   }
 
-  // Both branches above must have produced a signed transaction; if not, the
-  // server gave us an inconsistent state and broadcasting is not safe.
-  if (!serialized || !hash) {
-    fail('No signed transaction to broadcast. Nothing was sent.')
-  }
+  console.log('  broadcasting...')
+  const broadcastHash = await rpc<string>(config, 'sendRawTransaction', [serialized])
 
-  // 5. Broadcast. Safe to repeat: identical bytes, identical hash.
-  try {
-    await rpc<string>(config, 'eth_sendRawTransaction', [serialized])
-    console.log(`  ✓ broadcast`)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    // "already known" / "nonce too low" mean it is already on chain, which is a
-    // success for our purposes — do not treat a re-broadcast as a failure.
-    if (!/already known|nonce too low|already imported/i.test(message)) {
-      await callFunction(config, 'fail-payout', {
-        ...auth,
-        payout_id: payoutId,
-        reason: `Broadcast failed: ${message}`.slice(0, 300),
-      })
-      fail(`Broadcast failed and the payout was marked failed: ${message}`)
-    }
-    console.log(`  ✓ already on chain`)
-  }
+  const finalHash = broadcastHash || hash
+  console.log(`  broadcast: ${finalHash}`)
 
-  // 6. Wait for the receipt, then let the server verify and settle it.
-  const deadline = Date.now() + RECEIPT_TIMEOUT_MS
-  let receipt: TxReceipt | null = null
+  const deadline = Date.now() + CONFIRM_TIMEOUT_MS
+  let confirmations = 0
 
   while (Date.now() < deadline) {
-    receipt = await rpc<TxReceipt | null>(config, 'eth_getTransactionReceipt', [hash])
-    if (receipt) break
+    const tx = await rpc<NimiqTransaction | null>(config, 'getTransactionByHash', [
+      finalHash,
+    ]).catch(() => null)
+
+    if (tx) {
+      confirmations = tx.confirmations ?? 0
+      if (!tx.executionResult) {
+        await callFunction(config, 'fail-payout', {
+          payout_id: payoutId,
+          reason: 'The transaction failed on-chain.',
+          auth_token: token,
+        })
+        fail('The payout transaction failed on-chain.')
+      }
+      if (confirmations >= CONFIRMATIONS_REQUIRED) break
+      console.log(`  ${confirmations}/${CONFIRMATIONS_REQUIRED} confirmations...`)
+    } else {
+      console.log('  waiting for the network to see it...')
+    }
+
     await new Promise((resolve) => setTimeout(resolve, POLL_MS))
   }
 
-  if (!receipt) {
+  if (confirmations < CONFIRMATIONS_REQUIRED) {
     console.log(
-      `\n  ! not mined within ${RECEIPT_TIMEOUT_MS / 1000}s. It is recorded as` +
-        `\n    'sending' with its signed bytes, so re-run with --resume later.\n`,
+      '\n  Not confirmed within the timeout. The signed transaction is recorded;' +
+        '\n  re-run with --resume to check it again. Nothing was lost.\n',
     )
-    process.exit(1)
+    return
   }
 
-  if (receipt.status !== '0x1') {
-    await callFunction(config, 'fail-payout', {
-      ...auth,
-      payout_id: payoutId,
-      reason: `Transaction reverted on chain (${hash})`,
-    })
-    fail(`The transaction reverted: ${explorerTxUrl(config.explorerBase, hash)}`)
-  }
-
-  // mark-payout-paid re-verifies the transfer on chain before settling, so a
-  // bug here cannot mark a payout paid without the money having moved.
   await callFunction(config, 'mark-payout-paid', {
-    ...auth,
     payout_id: payoutId,
-    tx_hash: hash,
+    tx_hash: finalHash,
+    auth_token: token,
   })
 
-  console.log(`  ✓ settled on chain`)
-  console.log(`\n  ${explorerTxUrl(config.explorerBase, hash)}\n`)
-}
-
-/** `balanceOf(address)` selector + padded argument. */
-function encodeTransferBalance(owner: string): `0x${string}` {
-  const selector = '0x70a08231'
-  return `${selector}${owner.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`
-}
-
-function formatRaw(value: bigint, decimals = USDT_DECIMALS): string {
-  const base = 10n ** BigInt(decimals)
-  const whole = value / base
-  const fraction = (value % base).toString().padStart(decimals, '0').replace(/0+$/, '')
-  return fraction ? `${whole}.${fraction}` : `${whole}`
+  console.log(`\n  paid ${claim.amount_nim} NIM to ${claim.payout_address}\n`)
 }
 
 main().catch((error) => {

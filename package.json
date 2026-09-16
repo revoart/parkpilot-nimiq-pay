@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "ParkPilot - find parking, pay with USDT through Nimiq Pay.",
+  "description": "ParkPilot - find parking, pay with NIM through Nimiq Pay.",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@nimiq/core": "^2.21.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/google.maps": "^3.66.2",
     "@types/node": "^22.10.0",

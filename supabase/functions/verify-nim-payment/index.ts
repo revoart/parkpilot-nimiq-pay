@@ -180,7 +180,7 @@ Deno.serve(async (request) => {
     const { data: reservation, error: reservationError } = await supabase
       .from('reservations')
       .select(
-        'id, parking_space_id, nmiq_address, amount_nim, status, recipient_address, host_amount_nim, fee_amount_nim, parking_spaces ( owner_evm_address )',
+        'id, parking_space_id, nimiq_address, amount_nim, status, recipient_address, host_amount_nim, fee_amount_nim, parking_spaces ( owner_nimiq_address )',
       )
       .eq('id', reservation_id)
       .single()
@@ -193,18 +193,18 @@ Deno.serve(async (request) => {
     }
 
     const embedded = reservation.parking_spaces as
-      | { owner_evm_address?: string | null }
-      | { owner_evm_address?: string | null }[]
+      | { owner_nimiq_address?: string | null }
+      | { owner_nimiq_address?: string | null }[]
       | null
     const hostAddress = Array.isArray(embedded)
-      ? embedded[0]?.owner_evm_address
-      : embedded?.owner_evm_address
+      ? embedded[0]?.owner_nimiq_address
+      : embedded?.owner_nimiq_address
 
     const recipientAddress = reservation.recipient_address
     if (!isValidNimiqAddress(recipientAddress)) {
       return errorResponse(request, 'Reservation recipient is misconfigured.', 500)
     }
-    if (!isValidNimiqAddress(reservation.nmiq_address)) {
+    if (!isValidNimiqAddress(reservation.nimiq_address)) {
       return errorResponse(
         request,
         'This reservation has no Nimiq payer address on file.',
@@ -230,7 +230,7 @@ Deno.serve(async (request) => {
     ): Promise<Response> => {
       const paymentId = await recordPayment(supabase, {
         reservationId: reservation.id,
-        senderAddress: normalizeNimiqAddress(reservation.nmiq_address),
+        senderAddress: normalizeNimiqAddress(reservation.nimiq_address),
         recipientAddress: normalizeNimiqAddress(recipientAddress),
         amountLuna: expectedLuna.toString(),
         amountNim,
@@ -259,7 +259,7 @@ Deno.serve(async (request) => {
     ): Promise<Response> => {
       const paymentId = await recordPayment(supabase, {
         reservationId: reservation.id,
-        senderAddress: normalizeNimiqAddress(reservation.nmiq_address),
+        senderAddress: normalizeNimiqAddress(reservation.nimiq_address),
         recipientAddress: normalizeNimiqAddress(recipientAddress),
         amountLuna: (receivedLuna ?? expectedLuna).toString(),
         amountNim,
@@ -311,7 +311,7 @@ Deno.serve(async (request) => {
 
     const expectedRecipient = normalizeNimiqAddress(recipientAddress)
     const actualRecipient = normalizeNimiqAddress(transaction.to)
-    const expectedSender = normalizeNimiqAddress(reservation.nmiq_address)
+    const expectedSender = normalizeNimiqAddress(reservation.nimiq_address)
     const actualSender = normalizeNimiqAddress(transaction.from)
 
     if (actualRecipient !== expectedRecipient) {

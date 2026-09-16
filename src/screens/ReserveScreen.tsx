@@ -28,7 +28,6 @@ import { useDestination } from '@/hooks/useDestination'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
 import { trackEvent } from '@/lib/analytics/events'
-import { listNimiqAccounts } from '@/lib/nimiq'
 import {
   availableDays,
   getAvailability,
@@ -254,22 +253,8 @@ export function ReserveScreen() {
       return
     }
 
-    // NIM is paid from the driver's Nimiq account, so the reservation records
-    // which address will send it. The server refuses a booking without one —
-    // there would be nothing to verify a payment against.
-    let nmiqAddress: string | null = null
-    try {
-      const accounts = await listNimiqAccounts()
-      nmiqAddress = accounts[0] ?? null
-    } catch {
-      nmiqAddress = null
-    }
-    if (!nmiqAddress) {
-      setSubmitError(
-        'Connect your Nimiq account in Nimiq Pay to pay in NIM.',
-      )
-      return
-    }
+    // NIM is paid from the driver's Nimiq account, which is the account that
+    // signed in — the server records it as the reservation's payer.
 
     const start = new Date(`${date}T${startTime}:00`)
     const end = new Date(start.getTime() + durationMinutes * 60_000)
@@ -282,14 +267,13 @@ export function ReserveScreen() {
     try {
       const result = await createReservation({
         parkingSpaceId: space.id,
-        evmAddress: address,
-        nmiqAddress,
+        nimiqAddress: address,
         startAt: start.toISOString(),
         endAt: end.toISOString(),
         destination,
       })
       void trackEvent('reservation_started', {
-        evmAddress: address,
+        nimiqAddress: address,
         metadata: { parking_space_id: space.id, amount_nim: result.amount_nim },
       })
       // Free listings are already confirmed — no payment step.

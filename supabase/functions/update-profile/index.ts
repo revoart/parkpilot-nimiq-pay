@@ -5,7 +5,7 @@ import { errorResponse, json, preflight } from '../_shared/http.ts'
 import { normalizePhone } from '../_shared/phone.ts'
 
 interface Body {
-  evm_address?: string
+  nimiq_address?: string
   auth_token?: string
   display_name?: string | null
   bio?: string | null
@@ -38,7 +38,7 @@ Deno.serve(async (request) => {
     }
     const ownerAddress = owner.toLowerCase()
 
-    const update: Record<string, unknown> = { evm_address: ownerAddress }
+    const update: Record<string, unknown> = { nimiq_address: ownerAddress }
 
     if (body.display_name !== undefined) {
       const name = (body.display_name ?? '').trim()
@@ -101,7 +101,7 @@ Deno.serve(async (request) => {
     const { data: existing, error: findError } = await supabase
       .from('profiles')
       .select('id')
-      .ilike('evm_address', ownerAddress)
+      .ilike('nimiq_address', ownerAddress)
       .maybeSingle()
 
     if (findError) throw findError
@@ -120,9 +120,9 @@ Deno.serve(async (request) => {
     const { data } = await supabase
       .from('profiles')
       .select(
-        'display_name, bio, avatar_url, nmiq_address, evm_address, phone, phone_shared',
+        'display_name, bio, avatar_url, nimiq_address, phone, phone_shared',
       )
-      .ilike('evm_address', ownerAddress)
+      .ilike('nimiq_address', ownerAddress)
       .maybeSingle()
 
     return json(request, {
@@ -130,8 +130,7 @@ Deno.serve(async (request) => {
         display_name: data?.display_name ?? null,
         bio: data?.bio ?? null,
         avatar_url: data?.avatar_url ?? null,
-        nmiq_address: data?.nmiq_address ?? null,
-        evm_address: data?.evm_address ?? ownerAddress,
+        nimiq_address: data?.nimiq_address ?? ownerAddress,
         phone: data?.phone ?? null,
         phone_shared: Boolean(data?.phone_shared),
       },

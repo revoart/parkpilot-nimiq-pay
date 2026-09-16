@@ -89,7 +89,7 @@ export function ParkingPassScreen() {
       const result = await getReservation(id, wallet.address)
       setDetails(result)
       void trackEvent('parking_pass_viewed', {
-        evmAddress: wallet.address,
+        nimiqAddress: wallet.address,
         metadata: { reservation_id: id },
       })
     } catch (err) {
@@ -123,7 +123,7 @@ export function ParkingPassScreen() {
     setPendingSave(false)
     if (wallet.address) {
       void trackEvent('find_my_car_used', {
-        evmAddress: wallet.address,
+        nimiqAddress: wallet.address,
         metadata: { reservation_id: details.reservation.id },
       })
     }
@@ -434,7 +434,7 @@ export function ParkingPassScreen() {
               <ReceiptRow label="Network" value="Nimiq" />
               <ReceiptRow
                 label="Sender"
-                value={shortenAddress(reservation.evm_address, 6)}
+                value={shortenAddress(reservation.nimiq_address, 6)}
               />
               <ReceiptRow
                 label="Recipient"

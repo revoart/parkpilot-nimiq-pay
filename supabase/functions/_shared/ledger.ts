@@ -246,7 +246,7 @@ export async function getHostWalletSummary(
   const { data: spaces } = await supabase
     .from('parking_spaces')
     .select('id')
-    .ilike('owner_evm_address', address)
+    .ilike('owner_nimiq_address', address)
 
   let pending = 0
   const spaceIds = (spaces ?? []).map((row) => row.id as string)

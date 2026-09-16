@@ -106,7 +106,7 @@ export function EditProfileSheet({ open, onClose }: EditProfileSheetProps) {
             <Avatar
               url={preview ?? profile?.avatar_url ?? null}
               name={name || profile?.display_name || null}
-              address={profile?.evm_address ?? null}
+              address={profile?.nimiq_address ?? null}
               className="size-16 rounded-[20px]"
             />
             <span className="absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full bg-ink text-on-ink">

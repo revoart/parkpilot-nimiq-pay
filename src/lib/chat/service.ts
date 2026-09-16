@@ -17,13 +17,13 @@ import type {
 
 /** Every booking the wallet is party to, newest activity first. */
 export async function listConversations(
-  evmAddress: string,
+  nimiqAddress: string,
 ): Promise<ConversationSummary[]> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
 
   const { data, error } = await supabase.functions.invoke('list-conversations', {
-    body: { evm_address: evmAddress, auth_token: authToken },
+    body: { nimiq_address: nimiqAddress, auth_token: authToken },
   })
 
   if (error) {
@@ -41,16 +41,16 @@ export async function listConversations(
  * timestamp rather than something the client reconstructed.
  */
 export async function listMessages(
-  evmAddress: string,
+  nimiqAddress: string,
   reservationId: string,
   since?: string | null,
 ): Promise<ChatThreadResult> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
 
   const { data, error } = await supabase.functions.invoke('list-messages', {
     body: {
-      evm_address: evmAddress,
+      nimiq_address: nimiqAddress,
       reservation_id: reservationId,
       since: since ?? null,
       auth_token: authToken,
@@ -67,16 +67,16 @@ export async function listMessages(
 }
 
 export async function sendMessage(
-  evmAddress: string,
+  nimiqAddress: string,
   reservationId: string,
   body: string,
 ): Promise<ChatMessage> {
   const supabase = getSupabase()
-  const authToken = await requireToken(evmAddress)
+  const authToken = await requireToken(nimiqAddress)
 
   const { data, error } = await supabase.functions.invoke('send-message', {
     body: {
-      evm_address: evmAddress,
+      nimiq_address: nimiqAddress,
       reservation_id: reservationId,
       body,
       auth_token: authToken,
