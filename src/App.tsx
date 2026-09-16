@@ -89,6 +89,12 @@ const HostWalletScreen = lazy(() =>
     default: m.HostWalletScreen,
   })),
 )
+const MessagesScreen = lazy(() =>
+  import('@/screens/MessagesScreen').then((m) => ({ default: m.MessagesScreen })),
+)
+const ChatScreen = lazy(() =>
+  import('@/screens/ChatScreen').then((m) => ({ default: m.ChatScreen })),
+)
 
 function ScreenFallback() {
   return (
@@ -126,6 +132,8 @@ export default function App() {
                     <Route path="/pass/:id" element={<ParkingPassScreen />} />
                     <Route path="/session/:id" element={<SessionScreen />} />
                     <Route path="/my-parking" element={<MyParkingScreen />} />
+                    <Route path="/messages" element={<MessagesScreen />} />
+                    <Route path="/messages/:id" element={<ChatScreen />} />
                     <Route path="/saved" element={<SavedScreen />} />
                     <Route path="/profile" element={<ProfileScreen />} />
                     <Route

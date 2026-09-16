@@ -4,6 +4,7 @@ import {
   Bookmark,
   Car,
   Navigation,
+  ShieldAlert,
   ShieldCheck,
   Star,
   Zap,
@@ -11,13 +12,14 @@ import {
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { UsdtMark } from '@/components/brand/UsdtMark'
 import { AppShell } from '@/components/layout/AppShell'
 import { JourneySummary } from '@/components/journey'
 import { ParkingMap } from '@/components/map/ParkingMap'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { Button } from '@/components/ui/Button'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { StateCard } from '@/components/ui/StateCard'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { destinationQuery, useDestination } from '@/hooks/useDestination'
 import { useDrivingRoute } from '@/hooks/useDrivingRoute'
@@ -106,10 +108,77 @@ export function ParkingDetailScreen() {
   if (loading) {
     return (
       <AppShell bleed>
-        <div className="space-y-3 p-4">
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="absolute inset-0 flex flex-col">
+          <div className="relative flex h-[30%] shrink-0 items-center justify-center bg-map">
+            <button
+              type="button"
+              aria-label="Back"
+              onClick={() => navigate(-1)}
+              className="pointer-events-auto absolute left-3 top-3 z-[1000] flex size-10 items-center justify-center rounded-xl bg-surface-raised/95 shadow-sm shadow-black/5 backdrop-blur-sm"
+            >
+              <ArrowLeft className="size-5" />
+            </button>
+            <span
+              className="text-[15px] font-semibold text-ink-muted"
+              role="status"
+              aria-live="polite"
+            >
+              Loading Map…
+            </span>
+          </div>
+
+          <div className="no-scrollbar flex-1 overflow-y-auto bg-canvas pb-6">
+            <div className="px-4 pt-4">
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+              <Skeleton className="mt-3 h-7 w-3/4" />
+              <Skeleton className="mt-2.5 h-4 w-1/2" />
+
+              <div className="mt-4 rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-8 shrink-0 rounded-full" />
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="ml-auto h-7 w-28 rounded-full" />
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-1.5 flex-1 rounded-full" />
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {[0, 1, 2, 3].map((tile) => (
+                  <div
+                    key={tile}
+                    className="flex flex-col gap-2 rounded-xl bg-surface-raised p-3"
+                  >
+                    <Skeleton className="size-5 rounded-full" />
+                    <Skeleton className="h-3 w-10" />
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex items-center gap-3 rounded-2xl bg-surface-raised p-4">
+                <Skeleton className="size-8 shrink-0 rounded-full" />
+                <Skeleton className="h-4 w-24" />
+                <span className="h-px flex-1 border-t border-dashed border-line-strong" />
+                <Skeleton className="size-8 shrink-0 rounded-full" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+
+              <Skeleton className="mt-6 h-4 w-40" />
+              <div className="mt-3 rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="mt-3 h-4 w-full" />
+                <Skeleton className="mt-2 h-4 w-2/3" />
+              </div>
+            </div>
+          </div>
         </div>
       </AppShell>
     )
@@ -117,16 +186,25 @@ export function ParkingDetailScreen() {
 
   if (error || !space) {
     return (
-      <AppShell showBack title="Parking">
-        <EmptyState
-          title="Parking not found"
-          description={error ?? 'This parking space is unavailable.'}
-          action={
-            <Button variant="secondary" size="md" onClick={() => navigate('/')}>
-              Back to parking
-            </Button>
-          }
-        />
+      <AppShell showBack title="Listing Error">
+        <div className="flex min-h-full flex-col">
+          <div className="h-[30%] shrink-0 bg-map" aria-hidden="true" />
+          <div className="flex flex-1 items-center">
+            <StateCard
+              tone="danger"
+              icon={<ShieldAlert className="size-6" />}
+              title="Listing unavailable"
+              description={
+                error ??
+                'This parking spot may have been removed or is temporarily unavailable.'
+              }
+            >
+              <Button full size="lg" onClick={() => navigate('/')}>
+                Go Back
+              </Button>
+            </StateCard>
+          </div>
+        </div>
       </AppShell>
     )
   }
@@ -194,68 +272,71 @@ export function ParkingDetailScreen() {
           </div>
         </div>
 
-        <div className="no-scrollbar flex-1 overflow-y-auto bg-canvas pb-28">
+        <div className="no-scrollbar flex-1 overflow-y-auto bg-canvas pb-6">
           <div className="px-4 pt-4">
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="text-[19px] font-bold tracking-[-0.4px]">
-                {space.title}
-              </h1>
-              <div className="shrink-0 text-right">
-                <p className="text-[22px] font-bold leading-none tracking-[-0.5px]">
-                  {formatUsdt(space.price_usdt)}
-                </p>
-                <p className="mt-0.5 text-xs text-ink-muted">USDT / hr</p>
-              </div>
-            </div>
+            <StatusPill
+              tone="accent"
+              solid
+              className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.4px]"
+            >
+              {parkingTypeLabel(space.parking_type)}
+            </StatusPill>
 
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <StatusPill>{parkingTypeLabel(space.parking_type)}</StatusPill>
-              <span className="text-[13px] text-ink-muted">{space.address}</span>
-            </div>
+            <h1 className="mt-2.5 text-[22px] font-extrabold leading-[27px] tracking-[-0.4px]">
+              {space.title}
+            </h1>
+            <p className="mt-1 text-[14px] leading-5 text-ink-muted">
+              {space.address}
+            </p>
 
-            {reviews && reviews.count > 0 ? (
-              <div className="mt-2.5 flex items-center gap-2 text-[13px]">
-                <Star className="size-4 fill-star text-star" />
-                <span className="font-bold">{reviews.average.toFixed(1)}</span>
-                <span className="text-ink-muted">({reviews.count})</span>
-              </div>
-            ) : null}
-
-            {confidence !== null ? (
-              <div className="mt-3 flex items-center gap-3.5 rounded-2xl bg-success-bg/60 px-3.5 py-3">
-                <div>
-                  <p className="text-[22px] font-bold leading-none tracking-[-0.4px] text-success">
-                    {confidence}%
+            <div className="mt-4 flex items-start justify-between gap-4 rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+              <div className="min-w-0 flex-1">
+                {reviews && reviews.count > 0 ? (
+                  <p className="flex items-center gap-1.5 text-[14px] leading-none">
+                    <Star className="size-4 shrink-0 fill-star text-star" />
+                    <span className="font-bold">
+                      {reviews.average.toFixed(1)}
+                    </span>
+                    <span className="text-ink-muted">
+                      ({reviews.count} reviews)
+                    </span>
                   </p>
-                  <p className="mt-0.5 text-[11px] font-semibold text-success">
-                    Parking confidence
-                  </p>
-                </div>
-                <div className="flex-1">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-success-bg">
-                    <div
-                      className="h-full rounded-full bg-success"
-                      style={{ width: `${confidence}%` }}
-                    />
+                ) : null}
+
+                {confidence !== null ? (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="shrink-0 text-[13px] font-bold text-success">
+                      {confidence}% Match
+                    </span>
+                    <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-success-bg">
+                      <span
+                        className="block h-full rounded-full bg-success"
+                        style={{ width: `${confidence}%` }}
+                      />
+                    </span>
                   </div>
-                  <p className="mt-1 text-[11px] text-ink-muted">
-                    Based on {reviews?.count} driver reviews
-                  </p>
-                </div>
+                ) : null}
               </div>
-            ) : null}
 
-            <div className="mt-3 flex gap-2">
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand/30 bg-brand/8 py-1.5 pl-2 pr-3">
+                <UsdtMark className="size-5" />
+                <span className="text-[14px] font-bold leading-none tracking-[-0.2px]">
+                  {formatUsdt(space.price_usdt)}/hr USDT
+                </span>
+              </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
               {features.map(({ icon: Icon, label }) => (
-                <div
+                <span
                   key={label}
-                  className="flex flex-1 flex-col items-center gap-1 rounded-xl bg-surface py-2.5"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-surface px-3 py-2"
                 >
-                  <Icon className="size-4 text-ink-soft" />
-                  <span className="text-[10px] font-semibold text-ink-muted">
+                  <Icon className="size-4 text-brand" />
+                  <span className="text-[13px] font-semibold text-ink-soft">
                     {label}
                   </span>
-                </div>
+                </span>
               ))}
             </div>
 
@@ -281,43 +362,31 @@ export function ParkingDetailScreen() {
               ) : null}
             </div>
 
-            <div className="mt-4 border-t border-line pt-4">
-              <p className="text-[14px] font-bold">About this parking</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
-                {space.description ??
-                  'Reserve in advance and pay with USDT through Nimiq Pay. Your parking pass appears in Bookings once payment is confirmed on-chain.'}
-              </p>
-            </div>
-
             {reviews && reviews.reviews.length > 0 ? (
-              <div className="mt-4 border-t border-line pt-4">
-                <p className="text-[14px] font-bold">Reviews</p>
-                <div className="mt-2.5 space-y-3">
+              <div className="mt-6">
+                <p className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
+                  Recent stories &amp; reviews
+                </p>
+                <div className="mt-3 space-y-3">
                   {reviews.reviews.slice(0, 4).map((review) => (
-                    <div key={review.id}>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="flex size-7 items-center justify-center rounded-full bg-surface text-[10px] font-bold text-ink-soft">
-                            {review.name.charAt(0)}
-                          </span>
-                          <span className="text-sm font-semibold">
-                            {review.name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-0.5">
-                          {Array.from({ length: review.rating }).map((_, i) => (
-                            <Star
-                              key={i}
-                              className="size-3 fill-star text-star"
-                            />
-                          ))}
-                          <span className="ml-1 text-xs text-ink-faint">
+                    <div
+                      key={review.id}
+                      className="rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="truncate text-[15px] font-bold">
+                          {review.name}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1 text-[13px]">
+                          <Star className="size-4 fill-star text-star" />
+                          <span className="font-bold">{review.rating}</span>
+                          <span className="text-ink-faint">
                             {reviewDate(review.createdAt)}
                           </span>
-                        </div>
+                        </span>
                       </div>
                       {review.comment ? (
-                        <p className="text-[13px] text-ink-muted">
+                        <p className="mt-2 text-[14px] leading-5 text-ink-muted">
                           {review.comment}
                         </p>
                       ) : null}
@@ -326,47 +395,39 @@ export function ParkingDetailScreen() {
                 </div>
               </div>
             ) : null}
-          </div>
-        </div>
 
-        <div className="absolute inset-x-0 bottom-0 z-[1000] border-t border-line bg-surface-raised px-4 pb-3 pt-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[19px] font-bold leading-none tracking-[-0.3px]">
-              {formatUsdt(space.price_usdt)}
-              <span className="ml-1 text-[11px] font-medium text-ink-muted">
-                /hr USDT
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate('/search')}
-              className="text-[12px] font-semibold text-ink-muted"
-            >
-              View other options
-            </button>
-          </div>
+            <div className="mt-6 border-t border-line pt-4">
+              <p className="text-[15px] font-bold">About this parking</p>
+              <p className="mt-1.5 text-[14px] leading-5 text-ink-muted">
+                {space.description ??
+                  'Reserve in advance and pay with USDT through Nimiq Pay. Your parking pass appears in Bookings once payment is confirmed on-chain.'}
+              </p>
+            </div>
 
-          <div className="mt-2.5 flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="lg"
-              className="flex-1"
-              onClick={() =>
-                navigate(`/navigate/${space.id}${destinationQuery(destination)}`)
-              }
-            >
-              <Navigation className="mr-1.5 size-4" />
-              Navigate
-            </Button>
-            <Button
-              size="lg"
-              className="flex-[1.4]"
-              onClick={() =>
-                navigate(`/reserve/${space.id}${destinationQuery(destination)}`)
-              }
-            >
-              Reserve parking
-            </Button>
+            <div className="mt-6 flex items-center gap-3">
+              <Button
+                variant="secondary"
+                size="lg"
+                className="flex-1"
+                onClick={() =>
+                  navigate(
+                    `/navigate/${space.id}${destinationQuery(destination)}`,
+                  )
+                }
+              >
+                <Navigation className="mr-1.5 size-4" />
+                Navigate
+              </Button>
+              <Button
+                size="lg"
+                className="flex-1"
+                onClick={() =>
+                  navigate(`/reserve/${space.id}${destinationQuery(destination)}`)
+                }
+              >
+                Reserve Spot
+              </Button>
+            </div>
           </div>
         </div>
       </div>

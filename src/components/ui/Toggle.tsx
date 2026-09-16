@@ -17,14 +17,14 @@ export function Toggle({
       aria-label={ariaLabel}
       onClick={onChange}
       className={cn(
-        'relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors duration-200',
-        on ? 'bg-ink' : 'bg-line-strong',
+        'relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+        on ? 'bg-brand-fill' : 'bg-line-strong',
       )}
     >
       <span
         className={cn(
-          'absolute top-1 size-5 rounded-full bg-surface-raised shadow-sm transition-transform duration-200',
-          on ? 'translate-x-6' : 'translate-x-1',
+          'absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+          on ? 'translate-x-5' : 'translate-x-0',
         )}
       />
     </button>

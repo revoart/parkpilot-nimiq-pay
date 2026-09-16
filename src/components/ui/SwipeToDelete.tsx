@@ -83,10 +83,10 @@ export function SwipeToDelete({
           setOffset(0)
           onDelete()
         }}
-        className="absolute inset-y-0 right-0 flex w-[84px] flex-col items-center justify-center gap-1 bg-danger text-on-ink"
+        className="absolute inset-y-0 right-0 flex w-[84px] flex-col items-center justify-center gap-1 bg-danger-bg text-danger"
       >
         <Trash2 className="size-4" />
-        <span className="text-[11px] font-semibold">{label}</span>
+        <span className="text-[11px] font-bold">{label}</span>
       </button>
 
       <div

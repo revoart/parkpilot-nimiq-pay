@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Avatar } from '@/components/profile/Avatar'
 import { BottomSheet } from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/Button'
+import { Toggle } from '@/components/ui/Toggle'
 import { useToast } from '@/components/ui/Toast'
 import { useProfile } from '@/hooks/useProfile'
+import { normalizePhone } from '@/utils/phone'
 
 interface EditProfileSheetProps {
   open: boolean
@@ -23,6 +25,8 @@ export function EditProfileSheet({ open, onClose }: EditProfileSheetProps) {
 
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
+  const [phone, setPhone] = useState('')
+  const [phoneShared, setPhoneShared] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,6 +35,8 @@ export function EditProfileSheet({ open, onClose }: EditProfileSheetProps) {
     if (!open) return
     setName(profile?.display_name ?? '')
     setBio(profile?.bio ?? '')
+    setPhone(profile?.phone ?? '')
+    setPhoneShared(profile?.phone_shared ?? false)
     setPreview(null)
     setError(null)
   }, [open, profile])
@@ -52,9 +58,25 @@ export function EditProfileSheet({ open, onClose }: EditProfileSheetProps) {
 
   async function handleSave() {
     setError(null)
+
+    // Validate here as well as on the server, so the user finds out before a
+    // round trip rather than after.
+    const trimmedPhone = phone.trim()
+    const normalized = trimmedPhone ? normalizePhone(trimmedPhone) : null
+    if (trimmedPhone && !normalized) {
+      setError('Enter a valid phone number: 8 to 15 digits, optionally starting with +.')
+      return
+    }
+
     setBusy(true)
     try {
-      await save({ displayName: name.trim() || null, bio: bio.trim() || null })
+      await save({
+        displayName: name.trim() || null,
+        bio: bio.trim() || null,
+        phone: normalized,
+        // A number that is not set cannot be shared.
+        phoneShared: normalized ? phoneShared : false,
+      })
       toast.show('Profile saved.', 'success')
       onClose()
     } catch (err) {
@@ -131,6 +153,43 @@ export function EditProfileSheet({ open, onClose }: EditProfileSheetProps) {
             rows={3}
             placeholder="A short line about you (optional)"
             className="w-full resize-none rounded-xl bg-surface px-3.5 py-3 text-[13px] outline-none placeholder:text-ink-faint"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="profile-phone"
+            className="text-xs font-semibold text-ink-soft"
+          >
+            Phone number
+          </label>
+          <input
+            id="profile-phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="+1 416 555 1234"
+            className="w-full rounded-xl bg-surface px-3.5 py-3 text-[14px] outline-none placeholder:text-ink-faint"
+          />
+          <p className="text-[11px] leading-4 text-ink-muted">
+            Optional. Used so a host or driver can call you about a booking.
+          </p>
+        </div>
+
+        <div className="flex items-start gap-3 rounded-xl bg-surface p-3.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Share my number</p>
+            <p className="mt-0.5 text-[11px] leading-4 text-ink-muted">
+              Only visible to someone you have a booking with, and only while that
+              booking is active. Off by default.
+            </p>
+          </div>
+          <Toggle
+            on={phoneShared}
+            ariaLabel="Share my phone number with booking counterparties"
+            onChange={() => setPhoneShared((current) => !current)}
           />
         </div>
 

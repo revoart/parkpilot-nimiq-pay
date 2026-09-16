@@ -1,4 +1,4 @@
-import { CalendarClock, MapPin } from 'lucide-react'
+import { CalendarClock, MessageSquare, RefreshCw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -25,6 +25,8 @@ import { formatDateLabel, formatTimeLabel, formatUsdt } from '@/utils/format'
 import { cn } from '@/utils/cn'
 
 type Tab = 'upcoming' | 'active' | 'past'
+
+const TABS: Tab[] = ['upcoming', 'active', 'past']
 
 function categorize(item: ReservationSummary, now: number): Tab {
   const { status, start_at, end_at } = item.reservation
@@ -116,7 +118,7 @@ export function MyParkingScreen() {
 
   if (!wallet.address) {
     return (
-      <AppShell showNav title="Bookings">
+      <AppShell showBack title="My Parking">
         <EmptyState
           title="Connect your wallet"
           description="Connect Nimiq Pay to see your reservations."
@@ -131,17 +133,20 @@ export function MyParkingScreen() {
   }
 
   return (
-    <AppShell showNav title="Bookings">
+    <AppShell showBack title="My Parking">
       <div className="space-y-3">
-        <div className="flex rounded-2xl border border-line bg-surface-raised p-1">
-          {(['upcoming', 'active', 'past'] as Tab[]).map((value) => (
+        <div className="flex gap-2">
+          {TABS.map((value) => (
             <button
               key={value}
               type="button"
               onClick={() => setTab(value)}
+              aria-pressed={tab === value}
               className={cn(
-                'flex-1 rounded-xl py-2 text-sm font-semibold capitalize',
-                tab === value ? 'bg-accent text-on-ink' : 'text-ink-soft',
+                'flex-1 rounded-full border px-3 py-2.5 text-[14px] font-bold capitalize transition-colors',
+                tab === value
+                  ? 'border-transparent bg-accent text-on-ink'
+                  : 'border-line-strong bg-surface-raised text-ink-soft',
               )}
             >
               {value}
@@ -156,35 +161,51 @@ export function MyParkingScreen() {
         ) : null}
 
         {loading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
+          <div className="space-y-3" aria-busy="true">
+            {[0, 1, 2].map((card) => (
+              <div
+                key={card}
+                className="rounded-2xl bg-surface-raised p-3.5 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+                <div className="mt-4 space-y-2.5">
+                  <Skeleton className="h-4 w-3/4 rounded-full" />
+                  <Skeleton className="h-4 w-1/2 rounded-full" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
           <EmptyState
+            tone="danger"
             title="Couldn't load reservations"
             description={error}
             action={
-              <Button variant="secondary" size="md" onClick={() => void load()}>
+              <Button full size="md" onClick={() => void load()}>
+                <RefreshCw className="mr-2 size-4" />
                 Retry
               </Button>
             }
           />
         ) : visible.length === 0 ? (
           <EmptyState
-            icon={<CalendarClock className="size-5" />}
+            icon={<CalendarClock className="size-6" />}
             title={
               tab === 'upcoming'
-                ? 'No upcoming parking'
+                ? 'No upcoming bookings'
                 : tab === 'active'
-                  ? 'No active parking'
-                  : 'No past parking'
+                  ? 'No active bookings'
+                  : 'No past bookings'
             }
-            description="Reserve a space to see it here."
+            description="When you reserve parking, your bookings will appear here."
             action={
               tab === 'upcoming' ? (
-                <Button size="md" onClick={() => navigate('/')}>
-                  Find parking
+                <Button full size="md" onClick={() => navigate('/')}>
+                  <Search className="mr-2 size-4" />
+                  Find Parking
                 </Button>
               ) : undefined
             }
@@ -211,59 +232,69 @@ export function MyParkingScreen() {
                   disabled={!cancellable}
                 >
                   <Card className="space-y-2.5">
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => navigate(`/pass/${item.reservation.id}`)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        navigate(`/pass/${item.reservation.id}`)
-                      }
-                    }}
-                    className="cursor-pointer space-y-2"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <ListingPhoto
-                        imageUrl={item.parkingSpace.image_url}
-                        title={item.parkingSpace.title}
-                        className="size-12 shrink-0 rounded-xl"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-semibold">
-                          {item.parkingSpace.title}
-                        </p>
-                        <p className="mt-0.5 flex items-center gap-1 text-[11px] text-ink-muted">
-                          <MapPin className="size-3 shrink-0" />
-                          <span className="truncate">
-                            {item.parkingSpace.address}
-                          </span>
-                        </p>
-                      </div>
-                      <StatusPill tone={PHASE_TONE[phase]}>
-                        {PHASE_LABEL[phase]}
-                      </StatusPill>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-ink-soft">
-                      <span>
-                        {formatDateLabel(item.reservation.start_at)} ·{' '}
-                        {formatTimeLabel(item.reservation.start_at)} –{' '}
-                        {formatTimeLabel(item.reservation.end_at)}
-                      </span>
-                      <span className="font-semibold">
-                        {formatUsdt(item.reservation.amount_usdt)} USDT
-                      </span>
-                    </div>
-                  </div>
-
-                  {cancellable ? (
-                    <button
-                      type="button"
-                      onClick={() => setCancelTarget(item)}
-                      className="text-[11px] font-semibold text-danger"
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/pass/${item.reservation.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          navigate(`/pass/${item.reservation.id}`)
+                        }
+                      }}
+                      className="cursor-pointer space-y-2.5"
                     >
-                      Cancel reservation
-                    </button>
-                  ) : null}
+                      <div className="flex items-center justify-between gap-2">
+                        <StatusPill
+                          tone={PHASE_TONE[phase]}
+                          className="px-2.5 py-1 uppercase tracking-[0.4px]"
+                        >
+                          {PHASE_LABEL[phase]}
+                        </StatusPill>
+                        <span className="shrink-0 rounded-full bg-brand/10 px-2.5 py-1 text-[12px] font-bold text-brand">
+                          {formatUsdt(item.reservation.amount_usdt)} USDT
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <ListingPhoto
+                          imageUrl={item.parkingSpace.image_url}
+                          title={item.parkingSpace.title}
+                          className="size-11 shrink-0 rounded-xl"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[17px] font-bold tracking-[-0.2px]">
+                            {item.parkingSpace.title}
+                          </p>
+                          <p className="mt-0.5 truncate text-[13px] text-ink-muted">
+                            {formatDateLabel(item.reservation.start_at)} ·{' '}
+                            {formatTimeLabel(item.reservation.start_at)} –{' '}
+                            {formatTimeLabel(item.reservation.end_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-4 border-t border-line pt-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(`/messages/${item.reservation.id}`)
+                        }
+                        className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand"
+                      >
+                        <MessageSquare className="size-3.5" />
+                        Message host
+                      </button>
+
+                      {cancellable ? (
+                        <button
+                          type="button"
+                          onClick={() => setCancelTarget(item)}
+                          className="ml-auto text-[12px] font-semibold text-danger"
+                        >
+                          Cancel reservation
+                        </button>
+                      ) : null}
+                    </div>
                   </Card>
                 </SwipeToDelete>
               )

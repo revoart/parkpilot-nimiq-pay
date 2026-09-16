@@ -31,18 +31,21 @@ export function DayGrid({
           <button
             key={day.date}
             type="button"
+            aria-pressed={active}
             onClick={() => onChange(day.date)}
             className={cn(
-              'rounded-xl border py-3 text-center transition',
+              'rounded-2xl border py-2.5 text-center transition',
               active
-                ? 'border-brand bg-brand text-brand-fg'
-                : 'border-line text-ink',
+                ? 'border-brand-fill bg-brand-fill text-brand-fg shadow-[0_4px_12px_rgba(76,130,255,0.12)]'
+                : 'border-line bg-surface-raised text-ink',
             )}
           >
-            <span className="block text-[10px] font-semibold uppercase">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.4px]">
               {label.top}
             </span>
-            <span className="block text-[16px] font-bold">{label.bottom}</span>
+            <span className="block text-[16px] font-extrabold">
+              {label.bottom}
+            </span>
           </button>
         )
       })}
@@ -65,12 +68,13 @@ export function TimeSlotPicker({
         <button
           key={slot}
           type="button"
+          aria-pressed={slot === value}
           onClick={() => onChange(slot)}
           className={cn(
-            'shrink-0 rounded-xl border px-3.5 py-2 text-[13px] font-semibold transition',
+            'shrink-0 rounded-xl border px-3.5 py-2 text-[13px] font-bold transition',
             slot === value
-              ? 'border-brand bg-brand text-brand-fg'
-              : 'border-line text-ink',
+              ? 'border-brand-fill bg-brand-fill text-brand-fg'
+              : 'border-line bg-surface-raised text-ink',
           )}
         >
           {slot}
@@ -105,23 +109,24 @@ export function DurationPicker({
           <button
             key={preset}
             type="button"
+            aria-pressed={value === preset}
             onClick={() => onChange(preset)}
             className={cn(
-              'shrink-0 rounded-xl border px-3.5 py-2 text-[13px] font-semibold transition',
+              'shrink-0 rounded-xl border px-3.5 py-2 text-[13px] font-bold transition',
               value === preset
-                ? 'border-brand bg-brand text-brand-fg'
-                : 'border-line text-ink',
+                ? 'border-brand-fill bg-brand-fill text-brand-fg'
+                : 'border-line bg-surface-raised text-ink',
             )}
           >
             {label(preset)}
           </button>
         ))}
-      <div className="flex shrink-0 items-center gap-1 rounded-xl border border-line px-1.5 py-1">
+      <div className="flex shrink-0 items-center gap-1 rounded-xl border border-line bg-surface-raised px-1.5 py-1">
         <button
           type="button"
           aria-label="Decrease duration"
           onClick={() => onChange(Math.max(step, value - step))}
-          className="flex size-7 items-center justify-center rounded-lg bg-surface"
+          className="flex size-7 items-center justify-center rounded-lg bg-surface text-ink"
         >
           <Minus className="size-3.5" />
         </button>
@@ -132,7 +137,7 @@ export function DurationPicker({
           type="button"
           aria-label="Increase duration"
           onClick={() => onChange(Math.min(maxMinutes, value + step))}
-          className="flex size-7 items-center justify-center rounded-lg bg-surface"
+          className="flex size-7 items-center justify-center rounded-lg bg-surface text-ink"
         >
           <Plus className="size-3.5" />
         </button>

@@ -33,64 +33,62 @@ export function JourneySummary({
   const walkEstimated = walkRoute?.source === 'estimate'
 
   return (
-    <div className={cn('rounded-2xl bg-surface p-4', className)}>
-      <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-        To your destination
-      </p>
-
-      <div className="mt-3 space-y-2.5">
-        <div className="flex items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface-raised">
-            <Car className="size-4 text-ink" />
-          </span>
-          {driveRoute ? (
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-bold leading-tight">
-                {driveEstimated ? '~' : ''}
-                {formatDuration(driveRoute.durationSeconds)} drive
-                {driveRoute.trafficAware ? (
-                  <span className="ml-1.5 align-middle text-[10px] font-bold uppercase tracking-[0.6px] text-success">
-                    live traffic
-                  </span>
-                ) : null}
-              </p>
-              <p className="mt-0.5 text-xs text-ink-muted">
-                {formatDistance(driveRoute.distanceMeters)}
-                {driveEstimated ? ' estimated' : ''}
-              </p>
-            </div>
-          ) : (
-            <p className="flex-1 text-[13px] text-ink-muted">
-              {driveLoading
-                ? 'Calculating drive time…'
-                : 'Turn on location for drive time'}
+    <div
+      className={cn(
+        'flex items-center gap-3 rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]',
+        className,
+      )}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface">
+          <Car className="size-4 text-brand" />
+        </span>
+        {driveRoute ? (
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-bold leading-tight">
+              {driveEstimated ? '~' : ''}
+              {formatDuration(driveRoute.durationSeconds)} drive
             </p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface-raised">
-            <Footprints className="size-4 text-ink" />
-          </span>
-          {walkRoute ? (
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-bold leading-tight">
-                {walkEstimated ? '~' : ''}
-                {formatDuration(walkRoute.durationSeconds)} walk
-              </p>
-              <p className="mt-0.5 text-xs text-ink-muted">
-                {formatDistance(walkRoute.distanceMeters)}
-                {walkEstimated ? ' estimated' : ''}
-              </p>
-            </div>
-          ) : (
-            <p className="flex-1 text-[13px] text-ink-muted">
-              {walkLoading
-                ? 'Calculating walk…'
-                : 'Set a destination to see walking time'}
+            <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+              {formatDistance(driveRoute.distanceMeters)}
+              {driveEstimated ? ' estimated' : ''}
+              {driveRoute.trafficAware ? (
+                <span className="text-success"> · live</span>
+              ) : null}
             </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <p className="text-[13px] text-ink-muted">
+            {driveLoading ? 'Calculating drive…' : 'Location off'}
+          </p>
+        )}
+      </div>
+
+      <span
+        aria-hidden="true"
+        className="w-8 shrink-0 border-t border-dashed border-line-strong"
+      />
+
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface">
+          <Footprints className="size-4 text-brand" />
+        </span>
+        {walkRoute ? (
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-bold leading-tight">
+              {walkEstimated ? '~' : ''}
+              {formatDuration(walkRoute.durationSeconds)} walk
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+              {formatDistance(walkRoute.distanceMeters)}
+              {walkEstimated ? ' estimated' : ''}
+            </p>
+          </div>
+        ) : (
+          <p className="text-[13px] text-ink-muted">
+            {walkLoading ? 'Calculating walk…' : 'Set destination'}
+          </p>
+        )}
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
-import { ArrowUpRight, ExternalLink, Wallet } from 'lucide-react'
+import { ExternalLink, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
+import { UsdtMark } from '@/components/brand/UsdtMark'
 import { HostShell } from '@/components/layout/HostShell'
 import { BottomSheet } from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +11,7 @@ import { StatusPill } from '@/components/ui/StatusPill'
 import { useToast } from '@/components/ui/Toast'
 import { useWallet } from '@/hooks/useWallet'
 import { getHostWallet, requestPayout, type HostWallet } from '@/lib/host'
+import { cn } from '@/utils/cn'
 import { explorerTxUrl } from '@/utils/explorer'
 import { hapticConfirm } from '@/utils/haptics'
 import { formatDateLabel, formatUsdt, shortenAddress } from '@/utils/format'
@@ -19,6 +21,13 @@ const PAYOUT_TONE = {
   processing: 'accent',
   paid: 'success',
   failed: 'danger',
+} as const
+
+const PAYOUT_LABEL = {
+  requested: 'Requested',
+  processing: 'Processing',
+  paid: 'Completed',
+  failed: 'Failed',
 } as const
 
 export function HostWalletScreen() {
@@ -96,7 +105,7 @@ export function HostWalletScreen() {
 
   if (!wallet.address) {
     return (
-      <HostShell title="Wallet" subtitle="Host">
+      <HostShell title="Earnings">
         <EmptyState
           icon={<Wallet className="size-5" />}
           title="Connect your wallet"
@@ -114,11 +123,17 @@ export function HostWalletScreen() {
   const feePercent = data ? (data.fee_bps / 100).toFixed(0) : '10'
 
   return (
-    <HostShell title="Wallet" subtitle="Host">
+    <HostShell title="Earnings">
       {loading ? (
         <div className="space-y-3">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
+          <Skeleton className="mx-auto h-24 w-48 rounded-2xl" />
+          <div className="grid grid-cols-3 gap-2.5">
+            <Skeleton className="h-[68px] rounded-2xl" />
+            <Skeleton className="h-[68px] rounded-2xl" />
+            <Skeleton className="h-[68px] rounded-2xl" />
+          </div>
+          <Skeleton className="h-[104px] rounded-2xl" />
+          <Skeleton className="h-[104px] rounded-2xl" />
         </div>
       ) : error || !data ? (
         <EmptyState
@@ -131,38 +146,24 @@ export function HostWalletScreen() {
           }
         />
       ) : (
-        <div className="space-y-3">
-          <div className="rounded-2xl bg-surface-raised p-5">
+        <div className="space-y-5">
+          <div className="flex flex-col items-center gap-2 text-center">
             <p className="text-[11px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-              Available balance
+              Available for withdrawal
             </p>
-            <p className="mt-1 text-[40px] font-bold leading-none tracking-[-1.2px]">
-              {formatUsdt(data.available)}
-              <span className="ml-1 text-[14px] font-semibold text-ink-muted">
-                USDT
+            <div className="flex items-center gap-2">
+              <UsdtMark className="size-9" />
+              <span className="text-[40px] font-extrabold leading-none tracking-[-1.2px]">
+                {formatUsdt(data.available)}
               </span>
-            </p>
-            <p className="mt-2 text-[12px] text-ink-muted">
-              ParkPilot keeps a {feePercent}% platform fee. Payouts go to your
-              own wallet — ParkPilot never holds your keys.
-            </p>
-            <div className="mt-4">
-              <Button
-                full
-                size="lg"
-                disabled={data.available < data.min_payout_usdt}
-                onClick={() => {
-                  setNotice(null)
-                  setOpen(true)
-                }}
-              >
-                <ArrowUpRight className="mr-2 size-4" />
-                Withdraw USDT
-              </Button>
+              <span className="text-[18px] font-bold text-brand">USDT</span>
             </div>
+            <p className="text-[13px] text-ink-muted">
+              {feePercent}% platform fee applied • Automatically cleared
+            </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2.5">
             {[
               { label: 'Pending', value: data.pending },
               { label: 'Total earned', value: data.totalEarned },
@@ -170,69 +171,107 @@ export function HostWalletScreen() {
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="rounded-2xl bg-surface-raised px-3 py-3 text-center"
+                className="rounded-2xl bg-surface-raised px-3 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
               >
-                <p className="text-[18px] font-bold leading-none">
-                  {formatUsdt(stat.value)}
-                </p>
-                <p className="mt-1.5 text-[10px] font-medium leading-tight text-ink-muted">
+                <p className="text-[10px] font-bold uppercase leading-none tracking-[0.6px] text-ink-faint">
                   {stat.label}
+                </p>
+                <p className="mt-1.5 flex items-center gap-1 text-[17px] font-extrabold leading-none tracking-[-0.4px]">
+                  {formatUsdt(stat.value)}
+                  <span aria-hidden="true" className="text-[12px] text-ink">
+                    ₮
+                  </span>
                 </p>
               </div>
             ))}
           </div>
 
           {notice ? (
-            <p className="rounded-xl bg-surface-raised px-4 py-3 text-sm text-ink-soft">
+            <p className="rounded-2xl bg-surface-raised px-4 py-3 text-[13px] text-ink-soft">
               {notice}
             </p>
           ) : null}
 
-          <div className="rounded-2xl bg-surface-raised p-4">
-            <p className="mb-3 font-bold">Recent transactions</p>
+          <section className="space-y-2.5">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint">
+              Payout history (on-chain)
+            </h2>
             {data.payouts.length === 0 ? (
-              <p className="py-2 text-sm text-ink-muted">
-                No withdrawals yet. Your confirmed bookings credit this balance.
-              </p>
+              <EmptyState
+                icon={<Wallet className="size-5" />}
+                title="No withdrawals yet"
+                description="Your confirmed bookings credit this balance."
+              />
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {data.payouts.map((payout) => (
                   <div
                     key={payout.id}
-                    className="flex items-center justify-between gap-3"
+                    className="rounded-2xl bg-surface-raised p-3.5 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
                   >
-                    <div className="min-w-0">
-                      <p className="text-[14px] font-semibold">
-                        Withdrawal to {shortenAddress(payout.payout_address, 4)}
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-[16px] font-bold tracking-[-0.3px]">
+                        USDT Withdrawal
                       </p>
-                      <p className="text-xs text-ink-muted">
+                      <p
+                        className={cn(
+                          'shrink-0 text-[15px] font-bold',
+                          payout.status === 'paid'
+                            ? 'text-success'
+                            : payout.status === 'failed'
+                              ? 'text-danger'
+                              : 'text-ink',
+                        )}
+                      >
+                        {payout.status === 'failed' ? '' : '+'}
+                        {formatUsdt(payout.amount_usdt)} USDT
+                      </p>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-3">
+                      <p className="text-[13px] text-ink-muted">
                         {formatDateLabel(payout.requested_at)}
                       </p>
-                      {payout.tx_hash ? (
-                        <a
-                          href={explorerTxUrl(payout.tx_hash)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-brand"
-                        >
-                          <ExternalLink className="size-3" />
-                          View transaction
-                        </a>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-[14px] font-bold">
-                        {formatUsdt(payout.amount_usdt)}
-                      </span>
                       <StatusPill tone={PAYOUT_TONE[payout.status]}>
-                        {payout.status}
+                        {PAYOUT_LABEL[payout.status]}
                       </StatusPill>
                     </div>
+                    {payout.tx_hash ? (
+                      <>
+                        <div className="my-2.5 border-t border-line" />
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="truncate font-mono text-[12px] text-ink-muted">
+                            Tx: {shortenAddress(payout.tx_hash, 4)}
+                          </p>
+                          <a
+                            href={explorerTxUrl(payout.tx_hash)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 text-[13px] font-bold text-brand underline"
+                          >
+                            View
+                            <ExternalLink className="size-3.5" />
+                          </a>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </section>
+
+          <Button
+            full
+            size="lg"
+            variant="accent"
+            disabled={data.available < data.min_payout_usdt}
+            onClick={() => {
+              setNotice(null)
+              setOpen(true)
+            }}
+          >
+            Withdraw Earnings
+          </Button>
         </div>
       )}
 

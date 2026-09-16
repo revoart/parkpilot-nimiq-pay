@@ -3,9 +3,20 @@ dist
 dist-ssr
 *.local
 
-.env
-.env.*
+# Environment files.
+#
+# Order matters: git uses the LAST matching pattern, so the negation for the
+# template must come after the wildcard or `.env.example` is ignored too.
+.env*
 !.env.example
+
+# Anything that could hold a treasury key. These are belt-and-braces: the
+# `check:secrets` scan is what actually catches a leak, because it does not
+# depend on the file being named correctly.
+*.mnemonic
+*.seed
+*.key
+secrets/
 
 .DS_Store
 *.log
@@ -15,4 +26,8 @@ npm-debug.log*
 .idea
 
 .vercel
-.env*
+
+# Supabase CLI local state: project ref, organisation id, tool versions. It is
+# machine-specific and a fresh clone regenerates it, so it does not belong in
+# the repository.
+supabase/.temp/

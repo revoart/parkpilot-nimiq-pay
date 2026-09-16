@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Bookmark,
   Briefcase,
   Car,
@@ -8,6 +9,7 @@ import {
   MapPin,
   Navigation,
   Search,
+  Wallet,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -19,16 +21,18 @@ import { ParkingCard } from '@/components/parking/ParkingCard'
 import { PlaceSheet } from '@/components/places/PlaceSheet'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ParkingCardSkeleton } from '@/components/ui/Skeleton'
+import { StateCard } from '@/components/ui/StateCard'
+import { StatusPill } from '@/components/ui/StatusPill'
 import { SwipeToDelete } from '@/components/ui/SwipeToDelete'
-import { Skeleton } from '@/components/ui/Skeleton'
 import { useAddressSuggestions } from '@/hooks/useAddressSuggestions'
 import { useDrivingRoute } from '@/hooks/useDrivingRoute'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useNearbyParking } from '@/hooks/useNearbyParking'
+import { useWallet } from '@/hooks/useWallet'
 import { destinationQuery } from '@/hooks/useDestination'
 import { NEARBY_RADIUS_M } from '@/lib/parking'
 import {
-  formatDistance,
   formatDuration,
   getWalkingRoutes,
   type WalkingLeg,
@@ -56,6 +60,8 @@ export function SearchScreen() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const geo = useGeolocation()
+  const wallet = useWallet()
+  const gated = !wallet.address
 
   const [query, setQuery] = useState('')
   const [saved, setSaved] = useState<SavedPlaces>({ home: null, work: null })
@@ -332,45 +338,82 @@ export function SearchScreen() {
   const showingResults = Boolean(dest) || query.trim().length > 0
 
   return (
-    <AppShell showBack>
+    <AppShell showBack title="Find Parking">
       <div className="space-y-3">
-        <div className="flex h-12 items-center gap-2.5 rounded-xl bg-surface px-3.5">
-          <Search className="size-4 shrink-0 text-ink-faint" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={dest ? `Near ${dest.name}` : 'Search destination'}
-            aria-label="Search destination"
-            className="flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:text-ink-faint"
-          />
-          {dest ? (
-            <button
-              type="button"
-              aria-label="Clear destination"
-              onClick={() => setParams({})}
-              className="flex size-6 items-center justify-center rounded-full bg-surface-raised"
-            >
-              <X className="size-3.5 text-ink-soft" />
-            </button>
-          ) : null}
+        {/* Destination — the driver's navigation target. */}
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
+            Destination
+          </p>
+          <div
+            className={cn(
+              'flex h-12 items-center gap-2.5 rounded-2xl border bg-surface-raised px-3.5',
+              gated ? 'border-line' : 'border-brand',
+            )}
+          >
+            <MapPin
+              className={cn(
+                'size-[18px] shrink-0',
+                gated ? 'text-ink-faint' : 'text-brand',
+              )}
+            />
+            <input
+              value={query}
+              disabled={gated}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={
+                gated
+                  ? 'Search locked until wallet connection'
+                  : dest
+                    ? (dest.address ?? dest.name)
+                    : 'Where are you going?'
+              }
+              aria-label="Search destination"
+              className="flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:text-ink-faint disabled:cursor-not-allowed"
+            />
+            {dest ? (
+              <button
+                type="button"
+                aria-label="Clear destination"
+                onClick={() => setParams({})}
+                className="flex size-6 items-center justify-center rounded-full bg-surface"
+              >
+                <X className="size-3.5 text-ink-soft" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
+        {gated ? (
+          <StateCard
+            tone="brand"
+            icon={<Wallet className="size-6" />}
+            title="Connect Your Wallet"
+            description="Sign in to search and book parking near your destination"
+          >
+            <Button
+              full
+              size="lg"
+              onClick={() => void wallet.connect()}
+              loading={wallet.status === 'connecting'}
+            >
+              Connect Wallet
+            </Button>
+          </StateCard>
+        ) : (
+          <div className="space-y-3">
         {/* Home / Work / Recent shortcuts */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {shortcuts.map(({ kind, label, icon: Icon, value }) => (
             <button
               key={kind}
               type="button"
               onClick={() => setSheet(kind)}
-              className="flex h-16 flex-col items-center justify-center gap-1 rounded-2xl bg-surface-raised px-2 shadow-sm shadow-black/5 active:opacity-80"
+              aria-label={`${label}: ${value}`}
+              className="flex shrink-0 items-center gap-2 rounded-full border border-line bg-surface-raised px-3.5 py-2 text-[13px] font-semibold active:opacity-80"
             >
               <Icon className="size-4 shrink-0 text-ink-soft" />
-              <span className="text-xs font-semibold leading-none">
-                {label}
-              </span>
-              <span className="w-full truncate text-center text-[10px] leading-none text-ink-muted">
-                {value}
-              </span>
+              {label}
             </button>
           ))}
         </div>
@@ -378,37 +421,25 @@ export function SearchScreen() {
         {/* A destination is a navigation target in its own right. Parking is a
             separate, optional intent — the driver is never forced through it. */}
         {dest ? (
-          <div className="rounded-2xl bg-surface-raised p-4">
-            <div className="flex items-start gap-2">
-              <MapPin className="mt-0.5 size-4 shrink-0 text-ink-soft" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-bold">{dest.name}</p>
-                <p className="mt-0.5 truncate text-xs text-ink-muted">
-                  {dest.address ??
-                    `${dest.lat.toFixed(4)}, ${dest.lng.toFixed(4)}`}
-                </p>
-              </div>
-            </div>
+          <div className="rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <p className="truncate text-[17px] font-bold tracking-[-0.2px]">
+              {dest.name}
+            </p>
+            <p className="mt-0.5 truncate text-[13px] text-ink-muted">
+              {dest.address ?? `${dest.lat.toFixed(4)}, ${dest.lng.toFixed(4)}`}
+            </p>
 
-            <div className="mt-3 flex items-center gap-2.5">
+            <div className="my-3 border-t border-line" />
+
+            <div className="flex items-center gap-2.5">
               <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface">
                 <Car className="size-4 text-ink" />
               </span>
               {driveRoute ? (
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-bold leading-tight">
-                    {driveRoute.source === 'estimate' ? '~' : ''}
-                    {formatDuration(driveRoute.durationSeconds)} drive
-                    {driveRoute.trafficAware ? (
-                      <span className="ml-1.5 align-middle text-[10px] font-bold uppercase tracking-[0.6px] text-success">
-                        live traffic
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="mt-0.5 text-xs text-ink-muted">
-                    {formatDistance(driveRoute.distanceMeters)}
-                  </p>
-                </div>
+                <p className="min-w-0 flex-1 truncate text-[14px] font-bold leading-tight">
+                  Drive ETA: {driveRoute.source === 'estimate' ? '~' : ''}
+                  {formatDuration(driveRoute.durationSeconds)}
+                </p>
               ) : (
                 <p className="flex-1 text-[13px] text-ink-muted">
                   {geo.coords
@@ -416,12 +447,21 @@ export function SearchScreen() {
                     : 'Turn on location for drive time'}
                 </p>
               )}
+              {driveRoute?.trafficAware ? (
+                <StatusPill
+                  tone="success"
+                  className="shrink-0 uppercase tracking-[0.3px]"
+                >
+                  Live traffic
+                </StatusPill>
+              ) : null}
             </div>
 
             <div className="mt-3 flex items-center gap-2">
               <Button
+                variant="outline"
                 size="lg"
-                className="flex-1"
+                className="flex-1 border-brand/45 text-brand"
                 onClick={() =>
                   navigate(`/navigate${destinationQuery(dest)}`)
                 }
@@ -430,7 +470,6 @@ export function SearchScreen() {
                 Navigate
               </Button>
               <Button
-                variant="secondary"
                 size="lg"
                 className="flex-1"
                 onClick={() =>
@@ -449,6 +488,24 @@ export function SearchScreen() {
         {/* Refinements — hidden until there is something to refine. */}
         {showingResults ? (
           <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              type="button"
+              aria-pressed={!filtersActive}
+              onClick={() => {
+                setTypeFilter(null)
+                setEvOnly(false)
+                setCoveredOnly(false)
+                setMaxPrice(null)
+              }}
+              className={cn(
+                'shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition',
+                !filtersActive
+                  ? 'border-transparent bg-brand-fill text-brand-fg'
+                  : 'border-line bg-surface-raised text-ink-muted',
+              )}
+            >
+              All
+            </button>
             {(
               [
                 ['garage', 'Garage'],
@@ -465,10 +522,10 @@ export function SearchScreen() {
                   setTypeFilter(typeFilter === value ? null : value)
                 }
                 className={cn(
-                  'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition',
+                  'shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition',
                   typeFilter === value
-                    ? 'bg-ink text-on-ink'
-                    : 'bg-surface-raised text-ink-muted',
+                    ? 'border-transparent bg-brand-fill text-brand-fg'
+                    : 'border-line bg-surface-raised text-ink-muted',
                 )}
               >
                 {label}
@@ -479,21 +536,23 @@ export function SearchScreen() {
               aria-pressed={evOnly}
               onClick={() => setEvOnly((v) => !v)}
               className={cn(
-                'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition',
-                evOnly ? 'bg-ink text-on-ink' : 'bg-surface-raised text-ink-muted',
+                'shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition',
+                evOnly
+                  ? 'border-transparent bg-brand-fill text-brand-fg'
+                  : 'border-line bg-surface-raised text-ink-muted',
               )}
             >
-              EV
+              EV Charging
             </button>
             <button
               type="button"
               aria-pressed={coveredOnly}
               onClick={() => setCoveredOnly((v) => !v)}
               className={cn(
-                'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition',
+                'shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition',
                 coveredOnly
-                  ? 'bg-ink text-on-ink'
-                  : 'bg-surface-raised text-ink-muted',
+                  ? 'border-transparent bg-brand-fill text-brand-fg'
+                  : 'border-line bg-surface-raised text-ink-muted',
               )}
             >
               Covered
@@ -503,10 +562,10 @@ export function SearchScreen() {
               aria-pressed={maxPrice !== null}
               onClick={() => setMaxPrice(maxPrice === null ? 5 : null)}
               className={cn(
-                'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition',
+                'shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition',
                 maxPrice !== null
-                  ? 'bg-ink text-on-ink'
-                  : 'bg-surface-raised text-ink-muted',
+                  ? 'border-transparent bg-brand-fill text-brand-fg'
+                  : 'border-line bg-surface-raised text-ink-muted',
               )}
             >
               Under $5
@@ -516,31 +575,27 @@ export function SearchScreen() {
 
         {showingResults ? (
           loading || (searchCenter !== null && !ready && !error) ? (
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-                Finding nearby parking…
-              </p>
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-24 w-full" />
+            <div className="space-y-3" aria-busy="true">
+              <span className="sr-only">Loading parking results</span>
+              <ParkingCardSkeleton />
+              <ParkingCardSkeleton />
             </div>
           ) : error ? (
-            <EmptyState
-              title="Parking couldn't be loaded"
+            <StateCard
+              tone="danger"
+              icon={<AlertTriangle className="size-6" />}
+              title="Couldn't load results"
               description={error}
-              action={
-                <button
-                  type="button"
-                  onClick={reload}
-                  className="rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-on-ink"
-                >
-                  Try again
-                </button>
-              }
-            />
+            >
+              <div className="flex justify-center">
+                <Button size="md" onClick={reload}>
+                  Try Again
+                </Button>
+              </div>
+            </StateCard>
           ) : searchCenter === null ? (
-            /* No destination and no location: we have no honest centre to
-               search around, so we ask rather than inventing one. */
             <EmptyState
+              icon={<MapPin className="size-6" />}
               title="Choose a destination"
               description="Search for where you're going, or turn on location, to see parking nearby."
               action={
@@ -551,7 +606,10 @@ export function SearchScreen() {
             />
           ) : results.length === 0 && suggestions.length === 0 ? (
             <EmptyState
-              title="No parking available"
+              icon={<Search className="size-6" />}
+              title={
+                dest ? 'No parking found near destination' : 'No parking available'
+              }
               description={
                 filtersActive
                   ? 'No spaces match these filters. Try clearing them.'
@@ -600,7 +658,7 @@ export function SearchScreen() {
             <div className="space-y-3">
               {suggestions.length > 0 ? (
                 <div className="overflow-hidden rounded-2xl bg-surface-raised">
-                  <p className="px-4 pt-3 text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+                  <p className="px-4 pt-3 text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
                     Addresses
                   </p>
                   {suggestions.map((suggestion) => (
@@ -634,30 +692,30 @@ export function SearchScreen() {
 
                 {results.length > 0 ? (
                   <div ref={resultsRef} className="space-y-3 scroll-mt-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-                        {results.length} results{dest ? ` near ${dest.name}` : ''}
-                    </p>
-                    {dest ? (
-                      <div className="flex items-center gap-0.5 rounded-lg bg-surface p-0.5">
-                        {(['price', 'walk'] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setSort(mode)}
-                            className={cn(
-                              'rounded-md px-2.5 py-1 text-[11px] font-semibold transition',
-                              sort === mode
-                                ? 'bg-surface-raised text-ink shadow-sm shadow-black/5'
-                                : 'text-ink-muted',
-                            )}
-                          >
-                            {mode === 'price' ? 'Price' : 'Walk'}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-muted">
+                        {results.length} results found
+                      </p>
+                      {dest ? (
+                        <div className="flex items-center gap-0.5 rounded-lg bg-surface p-0.5">
+                          {(['price', 'walk'] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setSort(mode)}
+                              className={cn(
+                                'rounded-md px-2.5 py-1 text-[11px] font-semibold transition',
+                                sort === mode
+                                  ? 'bg-surface-raised text-ink shadow-sm shadow-black/5'
+                                  : 'text-ink-muted',
+                              )}
+                            >
+                              {mode === 'price' ? 'Price' : 'Walk'}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
 
                   {ordered.map((space) => {
                     const leg = walkLegs[space.id]
@@ -698,7 +756,7 @@ export function SearchScreen() {
         ) : (
           <>
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+              <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
                 Recent
               </p>
               {recents.map((place) => (
@@ -731,7 +789,7 @@ export function SearchScreen() {
 
             {savedPlaces.length > 0 ? (
               <div>
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+                <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
                   Saved places
                 </p>
                 {savedPlaces.map((item) => (
@@ -758,6 +816,8 @@ export function SearchScreen() {
               </div>
             ) : null}
           </>
+        )}
+          </div>
         )}
       </div>
 

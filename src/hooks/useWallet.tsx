@@ -61,10 +61,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!available) setStatus('unavailable')
 
     if (available) {
-      void ethereum
-        .getAccounts()
-        .then((accounts) => {
-          if (accounts.length) setAddress(accounts[0])
+      // Restore the session fully: an already-authorised wallet must also report
+      // its chain, otherwise the UI shows "wrong network" until the user
+      // reconnects manually even though it is already on Polygon.
+      void Promise.all([ethereum.getAccounts(), ethereum.getChainId()])
+        .then(([accounts, currentChain]) => {
+          if (!accounts.length) return
+          setAddress(accounts[0])
+          setChainId(currentChain)
+          setStatus(
+            currentChain.toLowerCase() === POLYGON_CHAIN_ID_HEX.toLowerCase()
+              ? 'connected'
+              : 'wrong_network',
+          )
         })
         .catch(() => undefined)
     }

@@ -1,4 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <rect x="7" y="7" width="86" height="86" rx="26" stroke="#0F0F0F" stroke-width="9"/>
-  <path d="M37 79V30h15a14 14 0 0 1 0 28H37" stroke="#0F0F0F" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .pp { stroke: #0f0f0f; fill: none }
+    .pp-fill { fill: #0f0f0f }
+    @media (prefers-color-scheme: dark) {
+      .pp { stroke: #ffffff }
+      .pp-fill { fill: #ffffff }
+    }
+  </style>
+  <rect class="pp" x="7" y="7" width="186" height="186" rx="45" stroke-width="14"/>
+  <mask id="pp-arch" fill="white">
+    <path d="M42 42H158V158H42V42Z"/>
+  </mask>
+  <path class="pp-fill" d="M42 42V30H30V42H42ZM158 42H170V30H158V42ZM42 42V54H158V42V30H42V42ZM158 42H146V158H158H170V42H158ZM42 158H54V42H42H30V158H42Z" mask="url(#pp-arch)"/>
+  <rect class="pp-fill" x="79" y="93" width="12" height="48"/>
+  <path class="pp" d="M108 84C115.18 84 121 89.8203 121 97C121 104.18 115.18 110 108 110H85V84H108Z" stroke-width="12"/>
 </svg>

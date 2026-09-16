@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Footprints, MapPin, Plus, Target } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, RefreshCw, User } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { StatusPill } from '@/components/ui/StatusPill'
 import { destinationQueryWith } from '@/hooks/useDestination'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
@@ -19,14 +18,17 @@ import {
   getReservation,
   type ReservationDetails,
 } from '@/lib/reservations'
-import { formatWalkTime } from '@/lib/routing'
+import { formatWalkDistance, formatWalkTime } from '@/lib/routing'
 import type { Destination } from '@/types'
 import { cn } from '@/utils/cn'
-import { formatDateLabel, formatTimeLabel, formatUsdt } from '@/utils/format'
+import { formatDateLabel, formatTimeLabel } from '@/utils/format'
 
 type Phase = 'upcoming' | 'active' | 'expiring' | 'complete'
 
 const EXTEND_OPTIONS = [30, 60, 120, 180]
+
+const RING_RADIUS = 70
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 
 function useCountdown(target: string | null): number {
   const [now, setNow] = useState(() => Date.now())
@@ -180,9 +182,40 @@ export function SessionScreen() {
   if (loading) {
     return (
       <AppShell showBack title="Parking session">
-        <div className="space-y-3">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-32 w-full" />
+        <div className="space-y-3" aria-busy="true">
+          <div className="rounded-2xl bg-surface-raised px-4 py-5 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <div className="flex justify-center">
+              <Skeleton className="h-4 w-36 rounded-full" />
+            </div>
+            <div className="mt-5 flex justify-center">
+              <Skeleton className="size-40 rounded-full" />
+            </div>
+            <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
+              <div className="space-y-2">
+                <Skeleton className="h-3.5 w-28 rounded-full" />
+                <Skeleton className="h-3 w-40 rounded-full" />
+              </div>
+              <Skeleton className="h-9 w-20 shrink-0 rounded-full" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <Skeleton className="size-11 shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-40 rounded-full" />
+              <Skeleton className="h-3 w-56 rounded-full" />
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <Skeleton className="h-3 w-40 rounded-full" />
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="flex items-center justify-between gap-3">
+                <Skeleton className="h-3.5 w-20 rounded-full" />
+                <Skeleton className="h-3.5 w-32 rounded-full" />
+              </div>
+            ))}
+          </div>
         </div>
       </AppShell>
     )
@@ -191,7 +224,17 @@ export function SessionScreen() {
   if (error && !details) {
     return (
       <AppShell showBack title="Parking session">
-        <EmptyState title="Session not found" description={error} />
+        <EmptyState
+          tone="danger"
+          title="Session unavailable"
+          description={error}
+          action={
+            <Button full size="md" onClick={() => void load()}>
+              <RefreshCw className="mr-2 size-4" />
+              Refresh
+            </Button>
+          }
+        />
       </AppShell>
     )
   }
@@ -199,204 +242,222 @@ export function SessionScreen() {
   if (!details) return null
 
   const { reservation, parkingSpace } = details
-  const progress =
-    phase === 'complete'
-      ? 100
-      : phase === 'upcoming'
-        ? 0
-        : Math.min(
-            100,
-            Math.max(
-              0,
-              100 -
-                (remaining /
-                  (new Date(reservation.end_at).getTime() -
-                    new Date(reservation.start_at).getTime())) *
-                  100,
-            ),
-          )
+  const sessionMs =
+    new Date(reservation.end_at).getTime() -
+    new Date(reservation.start_at).getTime()
+  const remainingFraction =
+    sessionMs > 0 ? Math.min(1, Math.max(0, remaining / sessionMs)) : 0
+
+  const destinationLabel = [destination?.name, destination?.address]
+    .filter(Boolean)
+    .join(', ')
+  const destinationMeta = [
+    destinationLabel,
+    walkRoute
+      ? `${formatWalkTime(walkRoute.durationSeconds)} walk (${formatWalkDistance(walkRoute.distanceMeters)})`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const receipt = [
+    { label: 'Garage', value: parkingSpace.title },
+    {
+      label: 'Arrival',
+      value: `${formatTimeLabel(reservation.start_at)} · ${formatDateLabel(reservation.start_at)}`,
+    },
+    {
+      label: 'Scheduled Departure',
+      value: `${formatTimeLabel(reservation.end_at)} · ${formatDateLabel(reservation.end_at)}`,
+    },
+  ]
+
+  const headerTitle =
+    phase === 'active' || phase === 'expiring'
+      ? 'Active Session'
+      : 'Parking session'
 
   return (
-    <AppShell showBack title="Parking session">
+    <AppShell showBack title={headerTitle}>
       <div className="space-y-3">
-        <Card className="flex flex-col items-center py-5 text-center">
+        <Card className="flex flex-col items-center gap-5 py-5">
           {phase === 'complete' ? (
-            <CheckCircle2 className="mb-3 size-9 text-success" />
-          ) : phase === 'expiring' ? (
-            <AlertTriangle className="mb-3 size-9 text-warning" />
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="size-4 text-success" />
+              <span className="text-[11px] font-extrabold uppercase tracking-[1.5px] text-ink">
+                Session complete
+              </span>
+            </div>
           ) : (
-            <span className="mb-3 flex items-center gap-2">
+            <div className="flex items-center gap-2" role="status" aria-live="polite">
               <span
+                aria-hidden="true"
                 className={cn(
                   'size-2 rounded-full',
-                  phase === 'upcoming' ? 'bg-ink-faint' : 'bg-success',
+                  phase === 'upcoming' ? 'bg-ink-faint' : 'bg-brand',
                 )}
               />
-              <span className="text-sm font-semibold text-ink-muted">
-                {phase === 'upcoming' ? 'Upcoming' : 'Active session'}
+              <span className="text-[11px] font-extrabold uppercase tracking-[1.5px] text-ink">
+                {phase === 'upcoming' ? 'Upcoming' : 'Currently parked'}
               </span>
-            </span>
+            </div>
           )}
 
-          <h1
-            className="text-[18px] font-bold tracking-[-0.3px]"
-            role="status"
-            aria-live="polite"
-          >
-            {phase === 'complete'
-              ? 'Session complete'
-              : phase === 'upcoming'
-                ? 'Starts soon'
-                : "You're parked"}
-          </h1>
-          <p className="mt-1 text-sm text-ink-muted">{parkingSpace.title}</p>
-
-          {phase !== 'complete' && phase !== 'upcoming' ? (
-            <div className="relative mt-6 flex size-44 items-center justify-center">
+          {phase === 'active' || phase === 'expiring' ? (
+            <div className="relative flex size-40 items-center justify-center">
               <svg
                 className="absolute inset-0 size-full -rotate-90"
-                viewBox="0 0 176 176"
+                viewBox="0 0 160 160"
+                aria-hidden="true"
               >
                 <circle
-                  cx="88"
-                  cy="88"
-                  r="76"
+                  cx="80"
+                  cy="80"
+                  r={RING_RADIUS}
                   fill="none"
                   stroke="var(--color-line)"
                   strokeWidth="8"
                 />
                 <circle
-                  cx="88"
-                  cy="88"
-                  r="76"
+                  cx="80"
+                  cy="80"
+                  r={RING_RADIUS}
                   fill="none"
-                  stroke="var(--color-ink)"
+                  stroke="var(--color-brand)"
                   strokeWidth="8"
                   strokeLinecap="round"
-                  strokeDasharray={2 * Math.PI * 76}
-                  strokeDashoffset={2 * Math.PI * 76 * (1 - progress / 100)}
+                  strokeDasharray={RING_CIRCUMFERENCE}
+                  strokeDashoffset={
+                    RING_CIRCUMFERENCE * (1 - remainingFraction)
+                  }
                 />
               </svg>
               <div className="text-center">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-ink-faint">
-                  Time left
-                </p>
-                <p className="font-mono text-[26px] font-bold leading-none">
+                <p className="text-[30px] font-extrabold leading-none tracking-[-1px] tabular-nums">
                   {formatCountdown(remaining)}
                 </p>
-                <p className="mt-1.5 text-xs text-ink-muted">
-                  Ends {formatTimeLabel(reservation.end_at)}
+                <p className="mt-2 text-[11px] font-bold uppercase tracking-[1.5px] text-ink-muted">
+                  Time remaining
                 </p>
               </div>
+            </div>
+          ) : (
+            <p className="text-[15px] font-semibold text-ink-soft">
+              {phase === 'upcoming'
+                ? `Starts ${formatTimeLabel(reservation.start_at)}`
+                : `Ended ${formatTimeLabel(reservation.end_at)}`}
+            </p>
+          )}
+
+          {phase !== 'complete' ? (
+            <div className="flex w-full items-center justify-between gap-3 border-t border-line pt-4">
+              <div className="min-w-0">
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.8px] text-ink">
+                  Need more time?
+                </p>
+                <p className="mt-0.5 text-[13px] text-ink-muted">
+                  Instantly append to session
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Extend session"
+                aria-expanded={showExtend}
+                onClick={() => setShowExtend(true)}
+                className="shrink-0 rounded-full border border-brand/40 bg-brand/5 px-3.5 py-2 text-[13px] font-bold text-brand transition active:scale-[0.97]"
+              >
+                +30 min
+              </button>
             </div>
           ) : null}
         </Card>
 
         {destination ? (
-          <Card className="space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-              Your destination
-            </p>
-            <div className="flex items-center gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface">
-                <Target className="size-4 text-ink" />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-[15px] font-bold">
-                  {destination.name}
-                </p>
-                <p className="text-xs text-ink-muted">
-                  {walkRoute
-                    ? `${formatWalkTime(walkRoute.durationSeconds)} walk from your parking`
-                    : 'From your parking space'}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              full
-              size="lg"
+          <Card>
+            <button
+              type="button"
+              aria-label={`Walk to ${destination.name}`}
               onClick={() =>
                 navigate(
                   `/navigate/${parkingSpace.id}${destinationQueryWith(destination, { leg: 'walk' })}`,
                 )
               }
+              className="flex w-full items-center gap-3 text-left"
             >
-              <Footprints className="size-4" />
-              Walk to Destination
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-surface">
+                <User className="size-5 text-ink" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-bold text-ink">
+                  Walking Destination
+                </span>
+                <span className="mt-0.5 block truncate text-[13px] text-ink-muted">
+                  {destinationMeta}
+                </span>
+              </span>
+            </button>
+          </Card>
+        ) : null}
+
+        <Card className="space-y-1">
+          <p className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
+            Booking receipt details
+          </p>
+          <dl>
+            {receipt.map((row) => (
+              <div
+                key={row.label}
+                className="flex items-center justify-between gap-3 border-b border-dashed border-line py-3 last:border-0"
+              >
+                <dt className="text-[14px] text-ink-muted">{row.label}</dt>
+                <dd className="truncate text-right text-[14px] font-semibold text-ink">
+                  {row.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+
+        {phase === 'active' || phase === 'expiring' ? (
+          <div className="flex items-start gap-2.5 rounded-2xl bg-danger-bg px-3.5 py-3">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
+            <p className="text-[13px] font-semibold leading-snug text-danger">
+              Releasing slot early forfeits remaining unaccrued time.
+            </p>
+          </div>
+        ) : null}
+
+        {showExtend ? (
+          <Card className="space-y-3">
+            <p className="text-[15px] font-bold">Extend by</p>
+            <div className="grid grid-cols-2 gap-2">
+              {EXTEND_OPTIONS.map((minutes) => (
+                <Button
+                  key={minutes}
+                  size="md"
+                  variant="secondary"
+                  disabled={extending}
+                  onClick={() => void handleExtend(minutes)}
+                >
+                  +{minutes >= 60 ? `${minutes / 60} hr` : `${minutes} min`}
+                </Button>
+              ))}
+            </div>
+            <p className="text-[13px] text-ink-muted">
+              Extending books the next available slot and is paid in USDT.
+            </p>
+            <Button
+              size="md"
+              variant="ghost"
+              full
+              onClick={() => setShowExtend(false)}
+            >
+              Cancel
             </Button>
           </Card>
         ) : null}
 
-        <Card className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-ink-muted">Date</span>
-            <span className="text-sm font-semibold">
-              {formatDateLabel(reservation.start_at)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-ink-muted">Time</span>
-            <span className="text-sm font-semibold">
-              {formatTimeLabel(reservation.start_at)} –{' '}
-              {formatTimeLabel(reservation.end_at)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-ink-muted">Amount</span>
-            <span className="text-sm font-semibold">
-              {formatUsdt(reservation.amount_usdt)} USDT
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-ink-muted">Status</span>
-            <StatusPill
-              tone={phase === 'complete' ? 'neutral' : 'success'}
-            >
-              {phase === 'complete' ? 'Completed' : 'Confirmed'}
-            </StatusPill>
-          </div>
-          <p className="flex items-center gap-1 pt-1 text-xs text-ink-muted">
-            <MapPin className="size-3.5" />
-            {parkingSpace.address}
-          </p>
-        </Card>
-
-        {phase !== 'complete' ? (
-          showExtend ? (
-            <Card className="space-y-3">
-              <p className="text-sm font-semibold">Extend by</p>
-              <div className="grid grid-cols-2 gap-2">
-                {EXTEND_OPTIONS.map((minutes) => (
-                  <Button
-                    key={minutes}
-                    size="md"
-                    variant="secondary"
-                    disabled={extending}
-                    onClick={() => void handleExtend(minutes)}
-                  >
-                    +{minutes >= 60 ? `${minutes / 60} hr` : `${minutes} min`}
-                  </Button>
-                ))}
-              </div>
-              <p className="text-xs text-ink-muted">
-                Extending books the next available slot and is paid in USDT.
-              </p>
-              <Button
-                size="md"
-                variant="ghost"
-                onClick={() => setShowExtend(false)}
-              >
-                Cancel
-              </Button>
-            </Card>
-          ) : (
-            <Button full size="lg" onClick={() => setShowExtend(true)}>
-              <Plus className="mr-2 size-4" />
-              Extend time
-            </Button>
-          )
-        ) : (
+        {phase === 'complete' ? (
           <Button
             full
             size="lg"
@@ -405,7 +466,7 @@ export function SessionScreen() {
           >
             Book this space again
           </Button>
-        )}
+        ) : null}
 
         {error ? <p className="text-sm text-danger">{error}</p> : null}
 

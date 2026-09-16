@@ -1,6 +1,7 @@
-import { Bookmark, MapPin } from 'lucide-react'
+import { Bookmark, MapPin, Star } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
+import { UsdtMark } from '@/components/brand/UsdtMark'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { parkingTypeLabel } from '@/lib/parking'
@@ -9,8 +10,18 @@ import type { ParkingSpace } from '@/types'
 import { cn } from '@/utils/cn'
 import { formatDistanceKm, formatUsdt } from '@/utils/format'
 
+/**
+ * Cards are rendered both from the radius search (which carries rating
+ * aggregates) and from saved listings (which do not), so the rating fields are
+ * optional rather than forcing every caller through the nearby RPC.
+ */
+export type ParkingCardSpace = ParkingSpace & {
+  rating_avg?: number | null
+  rating_count?: number
+}
+
 interface ParkingCardProps {
-  space: ParkingSpace
+  space: ParkingCardSpace
   distanceKm?: number | null
   onSelect?: (space: ParkingSpace) => void
   featured?: boolean
@@ -26,6 +37,25 @@ interface ParkingCardProps {
    * nothing is shown when the space is free rather than a blanket "Available".
    */
   busyUntil?: string | null
+}
+
+/**
+ * Price pill from the Figma card — USDT mark plus amount on a tinted capsule.
+ */
+function PricePill({ price, className }: { price: number; className?: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border border-line bg-brand/8 py-1 pl-1.5 pr-2.5',
+        className,
+      )}
+    >
+      <UsdtMark className="size-4" />
+      <span className="text-[12px] font-bold leading-none tracking-[-0.2px]">
+        {formatUsdt(price)} USDT
+      </span>
+    </span>
+  )
 }
 
 export function ParkingCard({
@@ -46,6 +76,11 @@ export function ParkingCard({
         minute: '2-digit',
       })}`
     : null
+
+  // Only a real aggregate is shown. A listing with no reviews falls back to its
+  // address rather than displaying a fabricated 0.0 rating.
+  const rating = space.rating_avg ?? null
+  const reviewCount = space.rating_count ?? 0
 
   if (compact) {
     return (
@@ -117,76 +152,85 @@ export function ParkingCard({
         if (event.key === 'Enter' || event.key === ' ') onSelect?.(space)
       }}
       className={cn(
-        'w-full cursor-pointer overflow-hidden rounded-2xl text-left transition active:opacity-90',
-        featured ? 'bg-subtle' : 'bg-surface-raised',
+        'w-full cursor-pointer rounded-2xl border bg-surface-raised p-2.5 text-left transition active:opacity-90',
+        featured ? 'border-brand/60' : 'border-line',
       )}
     >
-      <ListingPhoto
-        imageUrl={space.image_url}
-        title={space.title}
-        className="h-28 w-full"
-      />
+      <div className="flex gap-3">
+        <ListingPhoto
+          imageUrl={space.image_url}
+          title={space.title}
+          className="size-[76px] shrink-0 rounded-xl"
+        />
 
-      <div className="p-3.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-start justify-between gap-2">
             {badge ? (
-              <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-[1px] text-success">
+              <StatusPill tone="accent" solid className="uppercase tracking-[0.3px]">
                 {badge}
-              </span>
-            ) : featured ? (
-              <span className="text-[10px] font-bold uppercase tracking-[1px] text-success">
-                ✦ ParkPilot Pick
-              </span>
+              </StatusPill>
             ) : null}
-            <p className="truncate text-[15px] font-bold tracking-[-0.2px]">
-              {space.title}
+            {busyLabel ? (
+              <StatusPill
+                tone="success"
+                className="ml-auto uppercase tracking-[0.3px]"
+              >
+                {busyLabel}
+              </StatusPill>
+            ) : null}
+          </div>
+
+          <p className="truncate text-[16px] font-bold leading-tight tracking-[-0.3px]">
+            {space.title}
+          </p>
+
+          {rating !== null && reviewCount > 0 ? (
+            <p className="flex items-center gap-1.5 text-[12px] leading-none">
+              <Star className="size-3.5 shrink-0 fill-star text-star" />
+              <span className="font-semibold">{rating.toFixed(1)}</span>
+              <span className="text-ink-muted">({reviewCount})</span>
             </p>
-            <p className="mt-0.5 flex items-center gap-1 text-[12px] text-ink-muted">
+          ) : (
+            <p className="flex items-center gap-1 text-[12px] text-ink-muted">
               <MapPin className="size-3.5 shrink-0" />
-              <span className="truncate">
-                {space.address}
-                {typeof distanceKm === 'number'
-                  ? ` · ${formatDistanceKm(distanceKm)}`
-                  : ''}
-              </span>
+              <span className="truncate">{space.address}</span>
             </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <p className="text-[19px] font-bold leading-none tracking-[-0.4px]">
-              {formatUsdt(space.price_usdt)}
-            </p>
-            <p className="text-[11px] text-ink-muted">USDT / hr</p>
-            <button
-              type="button"
-              aria-label={saved ? 'Remove from saved' : 'Save parking'}
-              onClick={(event) => {
-                event.stopPropagation()
-                setSaved(toggleSaved(space))
-              }}
-              className="flex size-7 items-center justify-center rounded-lg bg-surface active:opacity-80"
-            >
-              <Bookmark
-                className={cn(
-                  'size-4',
-                  saved ? 'fill-ink text-ink' : 'text-ink-muted',
-                )}
-              />
-            </button>
+          )}
+
+          <div className="mt-auto flex items-end justify-between gap-2 pt-0.5">
+            <span className="min-w-0 truncate text-[12px] text-ink-muted">
+              {typeof distanceKm === 'number'
+                ? `Distance: ${formatDistanceKm(distanceKm)}`
+                : space.address}
+            </span>
+            <PricePill price={space.price_usdt} className="shrink-0" />
           </div>
         </div>
+      </div>
 
-        {walkSlot ? (
-          <div className="mt-2.5 rounded-xl bg-surface px-3 py-2">{walkSlot}</div>
-        ) : null}
+      {walkSlot ? <div className="mt-2.5">{walkSlot}</div> : null}
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <StatusPill>{parkingTypeLabel(space.parking_type)}</StatusPill>
-          {busyLabel ? <StatusPill tone="warning">{busyLabel}</StatusPill> : null}
-          {space.covered ? <StatusPill>Covered</StatusPill> : null}
-          {space.ev_charging ? <StatusPill tone="success">EV</StatusPill> : null}
-          {space.accessible ? <StatusPill>Accessible</StatusPill> : null}
-        </div>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <StatusPill>{parkingTypeLabel(space.parking_type)}</StatusPill>
+        {space.covered ? <StatusPill>Covered</StatusPill> : null}
+        {space.ev_charging ? <StatusPill tone="success">EV</StatusPill> : null}
+        {space.accessible ? <StatusPill>Accessible</StatusPill> : null}
+        <button
+          type="button"
+          aria-label={saved ? 'Remove from saved' : 'Save parking'}
+          onClick={(event) => {
+            event.stopPropagation()
+            setSaved(toggleSaved(space))
+          }}
+          className="ml-auto flex size-7 items-center justify-center rounded-lg bg-surface active:opacity-80"
+        >
+          <Bookmark
+            className={cn(
+              'size-4',
+              saved ? 'fill-ink text-ink' : 'text-ink-muted',
+            )}
+          />
+        </button>
       </div>
     </div>
   )

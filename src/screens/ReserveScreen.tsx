@@ -1,7 +1,15 @@
-import { SquareParking } from 'lucide-react'
+import {
+  CalendarDays,
+  ChevronDown,
+  Clock,
+  Hourglass,
+  ShieldAlert,
+  type LucideIcon,
+} from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { UsdtMark } from '@/components/brand/UsdtMark'
 import {
   DayGrid,
   DurationPicker,
@@ -9,10 +17,12 @@ import {
 } from '@/components/booking/BookingPickers'
 import { AppShell } from '@/components/layout/AppShell'
 import { DestinationCard } from '@/components/journey'
+import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { BottomSheet } from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { StateCard } from '@/components/ui/StateCard'
 import { useDestination } from '@/hooks/useDestination'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
@@ -28,6 +38,7 @@ import {
 } from '@/lib/parking'
 import { createReservation } from '@/lib/reservations'
 import type { ParkingSpace } from '@/types'
+import { cn } from '@/utils/cn'
 import { formatUsdt } from '@/utils/format'
 
 function toMinutes(value: string): number {
@@ -63,40 +74,52 @@ type SheetKind = 'date' | 'arrival' | 'duration' | null
 function Row({
   label,
   value,
+  icon: Icon,
   onClick,
   muted = false,
+  valueClassName,
 }: {
   label: string
   value: ReactNode
+  icon: LucideIcon
   onClick?: () => void
   muted?: boolean
+  valueClassName?: string
 }) {
   const content = (
     <>
-      <span className="text-[15px] text-ink-muted">{label}</span>
-      <span
-        className={
-          muted
-            ? 'text-[15px] text-ink-muted'
-            : 'text-[15px] font-semibold text-ink'
-        }
-      >
-        {value}
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface">
+          <Icon className="size-4 text-brand" />
+        </span>
+        <span className="truncate text-[15px] text-ink-muted">{label}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1">
+        <span
+          className={cn(
+            muted ? 'text-[15px] text-ink-muted' : 'text-[15px] font-bold text-ink',
+            valueClassName,
+          )}
+        >
+          {value}
+        </span>
+        {onClick ? <ChevronDown className="size-4 text-ink-muted" /> : null}
       </span>
     </>
   )
 
+  const base =
+    'flex w-full items-center justify-between gap-3 rounded-2xl bg-surface-raised px-3.5 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]'
+
   if (!onClick) {
-    return (
-      <div className="flex items-center justify-between py-3">{content}</div>
-    )
+    return <div className={base}>{content}</div>
   }
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between py-3 text-left active:opacity-70"
+      className={cn(base, 'text-left active:opacity-70')}
     >
       {content}
     </button>
@@ -111,6 +134,7 @@ export function ReserveScreen() {
   const [space, setSpace] = useState<ParkingSpace | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   const destination = useDestination()
   const { route } = useWalkingRoute(
@@ -127,6 +151,7 @@ export function ReserveScreen() {
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitFailed, setSubmitFailed] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -173,7 +198,7 @@ export function ReserveScreen() {
     return () => {
       active = false
     }
-  }, [id])
+  }, [id, attempt])
 
   const windows = useMemo<{ start: string; end: string }[]>(() => {
     if (!date) return []
@@ -211,6 +236,7 @@ export function ReserveScreen() {
 
   async function handleContinue() {
     setSubmitError(null)
+    setSubmitFailed(false)
     if (!space || !date || slots.length === 0) {
       setSubmitError('Choose an available date and time.')
       return
@@ -256,6 +282,7 @@ export function ReserveScreen() {
       setSubmitError(
         err instanceof Error ? err.message : 'Could not create the reservation.',
       )
+      setSubmitFailed(true)
     } finally {
       setSubmitting(false)
     }
@@ -263,11 +290,51 @@ export function ReserveScreen() {
 
   if (loading) {
     return (
-      <AppShell showBack title="Reserve parking">
+      <AppShell showBack title="Reserve Parking">
         <div className="space-y-3">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
+          <div className="flex items-center gap-3 rounded-2xl bg-surface-raised p-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <Skeleton className="size-14 shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </div>
+
+          <Skeleton className="h-3 w-40" />
+
+          <div className="space-y-2.5">
+            {[0, 1, 2, 3].map((row) => (
+              <div
+                key={row}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-surface-raised px-3.5 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+              >
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-8 shrink-0 rounded-xl" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <Skeleton className="h-3 w-48" />
+            <div className="mt-3 flex items-center justify-between">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            <div className="my-2 h-px bg-line" />
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-6 w-28" />
+            </div>
+          </div>
+
+          <Skeleton className="h-12 w-full rounded-xl" />
         </div>
       </AppShell>
     )
@@ -275,22 +342,77 @@ export function ReserveScreen() {
 
   if (loadError || !space) {
     return (
-      <AppShell showBack title="Reserve parking">
-        <EmptyState
-          title="Parking not found"
-          description={loadError ?? 'This parking space is unavailable.'}
-        />
+      <AppShell showBack title="Reserve Parking">
+        <div className="flex min-h-full items-center">
+          <StateCard
+            tone="danger"
+            icon={<ShieldAlert className="size-6" />}
+            title="Listing unavailable"
+            description={loadError ?? 'This parking space is unavailable.'}
+          >
+            <Button
+              full
+              size="lg"
+              onClick={() => setAttempt((current) => current + 1)}
+            >
+              Try Again
+            </Button>
+            <Button
+              full
+              size="lg"
+              variant="secondary"
+              onClick={() => navigate(-1)}
+            >
+              Go Back
+            </Button>
+          </StateCard>
+        </div>
       </AppShell>
     )
   }
 
   if (days.length === 0) {
     return (
-      <AppShell showBack title="Reserve parking">
+      <AppShell showBack title="Reserve Parking">
         <EmptyState
           title="No availability"
           description="This Host hasn't opened any bookable times yet."
         />
+      </AppShell>
+    )
+  }
+
+  if (submitFailed) {
+    return (
+      <AppShell showBack title="Reserve Parking">
+        <div className="flex min-h-full items-center">
+          <StateCard
+            tone="danger"
+            icon={<ShieldAlert className="size-6" />}
+            title="Reservation failed"
+            description={
+              submitError ??
+              "We couldn't process your reservation. The spot may no longer be available."
+            }
+          >
+            <Button
+              full
+              size="lg"
+              onClick={() => void handleContinue()}
+              loading={submitting}
+            >
+              Try Again
+            </Button>
+            <Button
+              full
+              size="lg"
+              variant="secondary"
+              onClick={() => navigate(-1)}
+            >
+              Go Back
+            </Button>
+          </StateCard>
+        </div>
       </AppShell>
     )
   }
@@ -300,40 +422,85 @@ export function ReserveScreen() {
       ? `${hours} ${hours === 1 ? 'hour' : 'hours'}`
       : `${durationMinutes} min`
 
+  const busy = submitting || wallet.status === 'connecting'
+
   return (
-    <AppShell showBack title="Reserve parking">
+    <AppShell showBack title="Reserve Parking">
       <div className="flex min-h-full flex-col">
         <div className="flex-1">
-          <div className="mb-6 flex items-center gap-3 rounded-2xl bg-subtle p-4">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-ink">
-              <SquareParking className="size-5 text-on-ink" />
-            </span>
+          <div className="flex items-center gap-3 rounded-2xl bg-surface-raised p-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <ListingPhoto
+              imageUrl={space.image_url}
+              title={space.title}
+              className="size-14 shrink-0 rounded-xl"
+            />
             <div className="min-w-0">
-              <p className="truncate font-bold">{space.title}</p>
-              <p className="truncate text-sm text-ink-muted">{space.address}</p>
+              <p className="truncate text-[16px] font-bold tracking-[-0.2px]">
+                {space.title}
+              </p>
+              <p className="truncate text-[13px] text-ink-muted">
+                {space.address}
+              </p>
             </div>
           </div>
 
-          <Row
-            label="Date"
-            value={dateLong(date)}
-            onClick={() => setSheet('date')}
-          />
-          <Row
-            label="Arrival"
-            value={time12(startTime)}
-            onClick={() => setSheet('arrival')}
-          />
-          <Row
-            label="Departure"
-            value={time12(endTime)}
-            muted
-          />
-          <Row
-            label="Duration"
-            value={durationLabel}
-            onClick={() => setSheet('duration')}
-          />
+          <p className="mb-2 mt-6 text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
+            Booking parameters
+          </p>
+          <div className="space-y-2.5">
+            <Row
+              icon={CalendarDays}
+              label="Booking Date"
+              value={dateLong(date)}
+              onClick={() => setSheet('date')}
+            />
+            <Row
+              icon={Clock}
+              label="Arrival Time"
+              value={time12(startTime)}
+              onClick={() => setSheet('arrival')}
+            />
+            <Row
+              icon={Clock}
+              label="Departure Time"
+              value={time12(endTime)}
+              muted
+            />
+            <Row
+              icon={Hourglass}
+              label="Total Duration"
+              value={durationLabel}
+              valueClassName="text-brand"
+              onClick={() => setSheet('duration')}
+            />
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-surface-raised p-4 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <p className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-faint">
+              Cost breakdown (on-chain accrued)
+            </p>
+            <div className="mt-3 flex items-center justify-between py-1.5">
+              <span className="text-[14px] text-ink-muted">
+                Hourly rate ({formatUsdt(space.price_usdt)} USDT × {hours})
+              </span>
+              <span className="text-[14px] font-semibold">
+                {formatUsdt(total)} USDT
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-[14px] text-ink-muted">
+                Wallet service fee
+              </span>
+              <span className="text-[14px] font-semibold">0.00 USDT</span>
+            </div>
+            <div className="my-2 h-px bg-line" />
+            <div className="flex items-center justify-between">
+              <span className="text-[15px] font-bold">Total amount</span>
+              <span className="text-[20px] font-extrabold tracking-[-0.3px] text-brand">
+                {formatUsdt(total)} USDT
+              </span>
+            </div>
+          </div>
 
           {destination ? (
             <div className="pt-4">
@@ -345,45 +512,23 @@ export function ReserveScreen() {
             </div>
           ) : null}
 
-          <div className="h-px bg-line" />
-
-          <div className="pt-4">
-            <div className="flex items-center justify-between py-3">
-              <span className="text-[15px] text-ink-muted">Parking</span>
-              <span className="text-[15px]">
-                {formatUsdt(total)} USDT
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-3">
-              <span className="text-[15px] text-ink-muted">Service fee</span>
-              <span className="text-[15px]">0.00 USDT</span>
-            </div>
-            <div className="h-px bg-line" />
-            <div className="flex items-center justify-between py-3.5">
-              <span className="text-[15px] font-bold">Total</span>
-              <span className="text-[22px] font-bold tracking-[-0.3px]">
-                {formatUsdt(total)} USDT
-              </span>
-            </div>
-          </div>
-
-          <p className="mt-2 text-center text-xs leading-relaxed text-ink-faint">
+          <p className="mt-4 text-center text-xs leading-relaxed text-ink-faint">
             Free cancellation before arrival. Payment is USDT on Polygon.
           </p>
 
           {submitError ? (
             <p className="mt-3 text-sm text-danger">{submitError}</p>
           ) : null}
-        </div>
 
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-line bg-canvas px-4 pb-3 pt-2.5">
           <Button
             full
             size="lg"
+            className="mt-4 gap-2"
             onClick={() => void handleContinue()}
-            loading={submitting || wallet.status === 'connecting'}
+            loading={busy}
             disabled={slots.length === 0}
           >
+            {!busy ? <UsdtMark className="size-4" /> : null}
             Confirm &amp; Pay {formatUsdt(total)} USDT
           </Button>
         </div>

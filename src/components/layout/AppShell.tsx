@@ -15,7 +15,10 @@ interface AppShellProps {
   showNav?: boolean
   /** Optional header action, rendered before the wallet pill. */
   action?: ReactNode
-  /** Full-bleed layout for map-first screens (no header, no padding). */
+  /**
+   * Full-bleed layout for map-first screens (no padding). A `title` or
+   * `showBack` still renders the header above the map.
+   */
   bleed?: boolean
   className?: string
 }
@@ -34,7 +37,7 @@ export function AppShell({
 
   return (
     <div className="safe-top flex h-full min-h-full w-full flex-col bg-canvas">
-      {!bleed ? (
+      {!bleed || title || showBack ? (
         <header className="flex items-center justify-between gap-3 bg-canvas px-4 pb-2.5 pt-2.5">
           <div className="flex min-w-0 items-center gap-2">
             {showBack ? (

@@ -1,91 +1,110 @@
 import {
   ArrowUpRight,
-  Bell,
-  Bookmark,
-  Car,
   Check,
   ChevronRight,
   Copy,
-  HelpCircle,
   Pencil,
+  Phone,
   Plus,
   RefreshCw,
-  Settings as SettingsIcon,
-  ShieldCheck,
-  TrendingUp,
 } from 'lucide-react'
-import { useCallback, useEffect, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { NimiqMark } from '@/components/brand/NimiqMark'
+import { UsdtMark } from '@/components/brand/UsdtMark'
 import { AppShell } from '@/components/layout/AppShell'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { Avatar } from '@/components/profile/Avatar'
 import { EditProfileSheet } from '@/components/profile/EditProfileSheet'
-import { NimiqIdentityCard } from '@/components/wallet/NimiqIdentityCard'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { ChainBadge } from '@/components/wallet/ChainBadge'
+import { NimiqIdentityCard } from '@/components/wallet/NimiqIdentityCard'
 import { useAppMode, type AppMode } from '@/hooks/useAppMode'
 import { useProfile } from '@/hooks/useProfile'
 import { useWallet } from '@/hooks/useWallet'
-import { getHostWallet, listHostSpaces, type HostSpace, type HostWallet } from '@/lib/host'
+import {
+  getHostWallet,
+  listHostSpaces,
+  type HostSpace,
+  type HostWallet,
+} from '@/lib/host'
 import {
   listReservations,
   type ReservationSummary,
 } from '@/lib/reservations'
 import { cn } from '@/utils/cn'
 import { formatUsdt, shortenAddress } from '@/utils/format'
+import { formatPhone, telHref } from '@/utils/phone'
 
 interface Row {
   label: string
-  icon: ComponentType<{ className?: string }>
   to: string
 }
 
 const ROWS: Row[] = [
-  { label: 'Bookings', icon: Car, to: '/my-parking' },
-  { label: 'Saved places', icon: Bookmark, to: '/saved' },
-  { label: 'Notifications', icon: Bell, to: '/notifications' },
-  { label: 'Privacy', icon: ShieldCheck, to: '/privacy' },
-  { label: 'Settings', icon: SettingsIcon, to: '/settings' },
-  { label: 'Help & support', icon: HelpCircle, to: '/privacy' },
+  { label: 'Messages', to: '/messages' },
+  { label: 'Settings', to: '/settings' },
+  { label: 'Privacy Policy', to: '/privacy' },
+  { label: 'Help & Support', to: '/privacy' },
 ]
 
-const HOST_ROWS: Row[] = [
-  { label: 'Host dashboard', icon: TrendingUp, to: '/host' },
-  { label: 'Host bookings', icon: Car, to: '/host/bookings' },
-  { label: 'Notifications', icon: Bell, to: '/notifications' },
-  { label: 'Settings', icon: SettingsIcon, to: '/settings' },
-  { label: 'Help & support', icon: HelpCircle, to: '/privacy' },
+const MODES: { value: AppMode; label: string }[] = [
+  { value: 'driver', label: 'Driver Mode' },
+  { value: 'host', label: 'Host Mode' },
 ]
 
-function Rows({ rows }: { rows: Row[] }) {
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-[10px] font-extrabold uppercase tracking-[1.2px] text-ink-faint dark:text-ink-muted">
+      {children}
+    </p>
+  )
+}
+
+function SettingsRows({ rows }: { rows: Row[] }) {
   const navigate = useNavigate()
   return (
-    <div className="overflow-hidden rounded-2xl bg-surface-raised">
-      {rows.map(({ label, icon: Icon, to }, index) => (
-        <div key={label}>
+    <div className="space-y-2">
+      {rows.map(({ label, to }) => (
+        <Card key={label} className="p-0">
           <button
             type="button"
             onClick={() => navigate(to)}
-            className="flex w-full items-center gap-3 px-4 py-3 active:bg-subtle"
+            className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-2.5 text-left active:opacity-90"
           >
-            <span className="flex size-9 items-center justify-center rounded-xl bg-surface">
-              <Icon className="size-4 text-ink-soft" />
-            </span>
-            <span className="flex-1 text-left text-[15px] font-medium">
+            <span className="text-[17px] font-bold tracking-[-0.2px]">
               {label}
             </span>
-            <ChevronRight className="size-4 text-ink-faint" />
+            <ChevronRight className="size-5 shrink-0 text-ink-faint" />
           </button>
-          {index < rows.length - 1 ? (
-            <div className="ml-[56px] h-px bg-line" />
-          ) : null}
-        </div>
+        </Card>
       ))}
     </div>
   )
+}
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+/** "Today, 10:00 AM" / "Yesterday, 6:30 PM" / "Sep 12, 8:00 AM". */
+function activityLabel(iso: string): string {
+  const date = new Date(iso)
+  const time = date.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000)
+  if (days === 0) return `Today, ${time}`
+  if (days === 1) return `Yesterday, ${time}`
+  return `${date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })}, ${time}`
 }
 
 export function ProfileScreen() {
@@ -96,6 +115,8 @@ export function ProfileScreen() {
 
   const [editOpen, setEditOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  const tel = telHref(profile?.phone)
 
   const [bookings, setBookings] = useState<ReservationSummary[]>([])
   const [hostWallet, setHostWallet] = useState<HostWallet | null>(null)
@@ -148,145 +169,165 @@ export function ProfileScreen() {
     }
   }, [wallet.address])
 
-  const now = Date.now()
-  const upcoming = bookings
-    .filter(
-      (item) =>
-        item.reservation.status === 'reservation_confirmed' &&
-        new Date(item.reservation.end_at).getTime() > now,
-    )
+  const displayName =
+    profile?.display_name?.trim() ||
+    (wallet.address ? shortenAddress(wallet.address, 4) : 'Your account')
+
+  const recent = [...bookings]
     .sort(
       (a, b) =>
-        new Date(a.reservation.start_at).getTime() -
-        new Date(b.reservation.start_at).getTime(),
+        new Date(b.reservation.start_at).getTime() -
+        new Date(a.reservation.start_at).getTime(),
     )
+    .slice(0, 3)
 
   return (
-    <AppShell showNav>
+    <AppShell showBack showNav title="Profile">
       <div className="space-y-3">
         {/* Identity */}
-        <div className="flex items-start gap-4">
-          <Avatar
-            url={profile?.avatar_url ?? null}
-            name={profile?.display_name ?? null}
-            address={wallet.address}
-            className="size-[68px] shrink-0 rounded-[22px]"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <p className="truncate text-[18px] font-bold tracking-[-0.3px]">
-                {profile?.display_name || 'Your account'}
+        <Card className="relative space-y-3 p-4">
+          <button
+            type="button"
+            aria-label="Edit profile"
+            onClick={() => setEditOpen(true)}
+            className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full bg-surface text-ink-soft active:opacity-90"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+
+          <div className="flex items-center gap-3.5">
+            {profile?.avatar_url ? (
+              <Avatar
+                url={profile.avatar_url}
+                name={profile.display_name}
+                address={wallet.address}
+                className="size-14 shrink-0 rounded-full"
+              />
+            ) : (
+              <NimiqMark className="size-14 shrink-0" />
+            )}
+            <div className="min-w-0 flex-1 pr-8">
+              <p className="truncate text-[20px] font-extrabold tracking-[-0.3px]">
+                {displayName}
               </p>
-              <button
-                type="button"
-                onClick={() => setEditOpen(true)}
-                aria-label="Edit profile"
-                className="-mr-1 flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface-raised"
-              >
-                <Pencil className="size-3.5 text-ink-soft" />
-              </button>
+              {profile?.bio ? (
+                <p className="mt-0.5 line-clamp-2 text-[13px] leading-[18px] text-ink-muted">
+                  {profile.bio}
+                </p>
+              ) : null}
             </div>
+          </div>
 
-            {profile?.bio ? (
-              <p className="mt-0.5 line-clamp-2 text-[13px] text-ink-muted">
-                {profile.bio}
-              </p>
-            ) : null}
-
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void copyAddress()}
-              className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-surface-raised px-2.5 py-1"
+              disabled={!wallet.address}
+              aria-label={
+                wallet.address ? 'Copy wallet address' : 'Wallet not connected'
+              }
+              className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-ink active:opacity-90 disabled:opacity-60"
             >
-              <span className="size-1.5 rounded-full bg-success" />
-              <span className="font-mono text-[11px] text-ink-soft">
-                {wallet.address ? shortenAddress(wallet.address, 6) : 'Not connected'}
-              </span>
+              {wallet.address ? shortenAddress(wallet.address, 5) : 'Not connected'}
               {copied ? (
                 <Check className="size-3 text-success" />
               ) : (
-                <Copy className="size-3 text-ink-faint" />
+                <Copy className="size-3 text-brand" />
               )}
             </button>
+
+            {/* Dial straight from the profile — the number is the user's own. */}
+            {tel ? (
+              <a
+                href={tel}
+                aria-label={`Call ${formatPhone(profile?.phone) ?? 'your number'}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-brand active:opacity-90"
+              >
+                <Phone className="size-3" />
+                {formatPhone(profile?.phone)}
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-ink-muted active:opacity-90"
+              >
+                <Phone className="size-3" />
+                Add phone
+              </button>
+            )}
           </div>
-        </div>
+        </Card>
 
         {/* Driver / Host */}
-        <div className="flex gap-1 rounded-2xl bg-surface-raised p-1">
-          {(['driver', 'host'] as AppMode[]).map((value) => (
+        <div className="flex gap-1 rounded-full bg-surface p-1">
+          {MODES.map(({ value, label }) => (
             <button
               key={value}
               type="button"
+              aria-pressed={mode === value}
               onClick={() => setMode(value)}
               className={cn(
-                'flex-1 rounded-xl py-2.5 text-[13px] font-bold capitalize transition-all',
+                'flex-1 rounded-full py-2.5 text-[14px] font-bold transition-colors',
                 mode === value
-                  ? 'bg-ink text-on-ink'
-                  : 'text-ink-faint',
+                  ? 'bg-surface-raised text-ink'
+                  : 'text-ink-muted',
               )}
             >
-              {value}
+              {label}
             </button>
           ))}
         </div>
 
         {mode === 'driver' ? (
           <>
-            <Card className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">Driver wallet</p>
-                  <p className="text-xs text-ink-muted">
-                    Spending wallet for parking
-                  </p>
+            {wallet.address ? (
+              <Card className="space-y-3.5 p-4">
+                <div className="flex items-center justify-between">
+                  <Eyebrow>Wallet balance</Eyebrow>
+                  <ChainBadge />
                 </div>
-                <StatusPill tone={wallet.onPolygon ? 'success' : 'neutral'}>
-                  {wallet.address
-                    ? wallet.onPolygon
-                      ? 'Polygon'
-                      : 'Wrong network'
-                    : 'Not connected'}
-                </StatusPill>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-surface p-3">
-                  <p className="text-xs text-ink-muted">USDT</p>
-                  <p className="mt-0.5 text-[19px] font-bold leading-none tracking-[-0.4px]">
+                <div className="flex items-baseline gap-2">
+                  <UsdtMark className="size-8 shrink-0 self-center" />
+                  <span className="text-[34px] font-extrabold leading-none tracking-[-1px]">
                     {wallet.usdtBalance === null
                       ? '—'
                       : formatUsdt(wallet.usdtBalance)}
-                  </p>
+                  </span>
+                  <span className="text-[20px] font-extrabold leading-none text-brand">
+                    USDT
+                  </span>
                 </div>
-                <div className="rounded-xl bg-surface p-3">
-                  <p className="text-xs text-ink-muted">POL (gas)</p>
-                  <p className="mt-0.5 text-[19px] font-bold leading-none tracking-[-0.4px]">
-                    {wallet.polBalance === null
-                      ? '—'
-                      : Number(wallet.polBalance).toFixed(3)}
-                  </p>
-                </div>
-              </div>
 
-              {wallet.address ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="md"
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
                     onClick={() => void wallet.refreshBalances()}
+                    className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand active:opacity-90"
                   >
                     <RefreshCw className="size-4" />
-                    Manage Wallet
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="md"
-                    onClick={() => navigate('/my-parking')}
+                    Refresh Balance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={wallet.disconnect}
+                    className="text-[14px] font-semibold text-danger underline active:opacity-90"
                   >
-                    View bookings
-                  </Button>
+                    Disconnect
+                  </button>
                 </div>
-              ) : (
+              </Card>
+            ) : (
+              <Card className="space-y-3.5 p-4">
+                <div className="flex items-center justify-between">
+                  <Eyebrow>Wallet balance</Eyebrow>
+                  <ChainBadge />
+                </div>
+                <p className="text-[14px] leading-5 text-ink-muted">
+                  Connect your wallet to see your USDT balance and pay for
+                  parking.
+                </p>
                 <Button
                   full
                   size="lg"
@@ -295,96 +336,62 @@ export function ProfileScreen() {
                 >
                   Connect Wallet
                 </Button>
-              )}
-            </Card>
+              </Card>
+            )}
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-                  Your parking
-                </p>
-              {dataLoading ? (
-                <Skeleton className="h-16 w-full rounded-2xl" />
-              ) : upcoming.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/my-parking')}
-                    className="text-[12px] font-semibold text-ink-muted"
-                  >
-                    View all
-                  </button>
-                ) : null}
-              </div>
-
-              {upcoming.length > 0 ? (
+            {recent.length > 0 ? (
+              <div className="space-y-2">
+                <div className="px-1">
+                  <Eyebrow>Recent activity</Eyebrow>
+                </div>
                 <div className="space-y-2">
-                  {upcoming.slice(0, 2).map((item) => (
-                    <button
-                      key={item.reservation.id}
-                      type="button"
-                      onClick={() => navigate(`/pass/${item.reservation.id}`)}
-                      className="flex w-full items-center gap-3 rounded-2xl bg-surface-raised p-3 text-left active:opacity-90"
-                    >
-                      <ListingPhoto
-                        imageUrl={item.parkingSpace.image_url}
-                        title={item.parkingSpace.title}
-                        className="size-12 shrink-0 rounded-xl"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[14px] font-semibold">
-                          {item.parkingSpace.title}
+                  {recent.map((item) => (
+                    <Card key={item.reservation.id} className="p-0">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/pass/${item.reservation.id}`)}
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left active:opacity-90"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-[17px] font-bold tracking-[-0.2px]">
+                            {item.parkingSpace.title}
+                          </span>
+                          <span className="mt-0.5 block text-[13px] text-ink-muted">
+                            {activityLabel(item.reservation.start_at)}
+                          </span>
                         </span>
-                        <span className="block truncate text-xs text-ink-muted">
-                          {new Date(
-                            item.reservation.start_at,
-                          ).toLocaleString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                        <span className="shrink-0 text-[15px] font-bold text-brand">
+                          {formatUsdt(item.reservation.amount_usdt)} USDT
                         </span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0 text-ink-faint" />
-                    </button>
+                      </button>
+                    </Card>
                   ))}
                 </div>
-              ) : (
-                <Card className="text-center">
-                  <p className="text-sm font-semibold">No upcoming parking</p>
-                  <p className="mt-1 text-xs text-ink-muted">
-                    Find a space and it will show up here.
-                  </p>
-                  <div className="mt-3">
-                    <Button size="md" onClick={() => navigate('/')}>
-                      Find parking
-                    </Button>
-                  </div>
-                </Card>
-              )}
-            </div>
+              </div>
+            ) : null}
 
+            <SettingsRows rows={ROWS} />
             <NimiqIdentityCard />
-            <Rows rows={ROWS} />
           </>
         ) : (
           <>
-            <Card className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">Host wallet</p>
-                  <p className="text-xs text-ink-muted">Earnings and payouts</p>
-                </div>
+            <Card className="space-y-3.5 p-4">
+              <div className="flex items-center justify-between">
+                <Eyebrow>Host wallet</Eyebrow>
                 <StatusPill tone="accent">Merchant</StatusPill>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-surface p-3">
-                  <p className="text-[11px] text-ink-muted">Available</p>
-                  <p className="mt-0.5 text-[17px] font-bold leading-none">
-                    {hostWallet ? formatUsdt(hostWallet.available) : '—'}
-                  </p>
-                </div>
+              <div className="flex items-baseline gap-2">
+                <UsdtMark className="size-8 shrink-0 self-center" />
+                <span className="text-[34px] font-extrabold leading-none tracking-[-1px]">
+                  {hostWallet ? formatUsdt(hostWallet.available) : '—'}
+                </span>
+                <span className="text-[20px] font-extrabold leading-none text-brand">
+                  USDT
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-surface p-3">
                   <p className="text-[11px] text-ink-muted">Pending</p>
                   <p className="mt-0.5 text-[17px] font-bold leading-none">
@@ -420,9 +427,7 @@ export function ProfileScreen() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
-                <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-                  Your listings
-                </p>
+                <Eyebrow>Your listings</Eyebrow>
                 <button
                   type="button"
                   onClick={() => navigate('/host/add')}
@@ -438,29 +443,30 @@ export function ProfileScreen() {
               ) : hostSpaces.length > 0 ? (
                 <div className="space-y-2">
                   {hostSpaces.slice(0, 3).map((space) => (
-                    <button
-                      key={space.id}
-                      type="button"
-                      onClick={() => navigate(`/host/space/${space.id}`)}
-                      className="flex w-full items-center gap-3 rounded-2xl bg-surface-raised p-3 text-left active:opacity-90"
-                    >
-                      <ListingPhoto
-                        imageUrl={space.image_url}
-                        title={space.title}
-                        className="size-12 shrink-0 rounded-xl"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[14px] font-semibold">
-                          {space.title}
+                    <Card key={space.id} className="p-0">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/host/space/${space.id}`)}
+                        className="flex w-full items-center gap-3 rounded-2xl p-3 text-left active:opacity-90"
+                      >
+                        <ListingPhoto
+                          imageUrl={space.image_url}
+                          title={space.title}
+                          className="size-12 shrink-0 rounded-xl"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] font-semibold">
+                            {space.title}
+                          </span>
+                          <span className="block truncate text-[13px] text-ink-muted">
+                            {formatUsdt(space.price_usdt)} USDT / hr
+                          </span>
                         </span>
-                        <span className="block truncate text-xs text-ink-muted">
-                          {formatUsdt(space.price_usdt)} USDT / hr
-                        </span>
-                      </span>
-                      <StatusPill tone={space.active ? 'success' : 'neutral'}>
-                        {space.active ? 'Live' : 'Paused'}
-                      </StatusPill>
-                    </button>
+                        <StatusPill tone={space.active ? 'success' : 'neutral'}>
+                          {space.active ? 'Live' : 'Paused'}
+                        </StatusPill>
+                      </button>
+                    </Card>
                   ))}
                 </div>
               ) : (
@@ -478,7 +484,7 @@ export function ProfileScreen() {
               )}
             </div>
 
-            <Rows rows={HOST_ROWS} />
+            <SettingsRows rows={ROWS} />
           </>
         )}
       </div>

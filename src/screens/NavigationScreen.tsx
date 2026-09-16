@@ -2,13 +2,11 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
-  Car,
   CornerUpLeft,
   CornerUpRight,
   Flag,
   Footprints,
   LocateFixed,
-  MapPin,
   Merge,
   Navigation,
   RotateCcw,
@@ -24,7 +22,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useDestination } from '@/hooks/useDestination'
-import { useNavigation, type NavigationMode, type NavigationPhase } from '@/hooks/useNavigation'
+import { useNavigation, type NavigationMode } from '@/hooks/useNavigation'
 import { useTheme } from '@/hooks/useTheme'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { getParkingSpace } from '@/lib/parking'
@@ -41,6 +39,8 @@ import { cn } from '@/utils/cn'
  */
 type Leg = 'drive' | 'walk'
 
+const CARD_SHADOW = 'shadow-[0_4px_12px_rgba(0,0,0,0.04)]'
+
 function maneuverIcon(maneuver: string): ComponentType<{ className?: string }> {
   const value = maneuver.toUpperCase()
   if (value.includes('UTURN')) return RotateCcw
@@ -55,8 +55,11 @@ function maneuverIcon(maneuver: string): ComponentType<{ className?: string }> {
   return ArrowUp
 }
 
-function isTerminal(phase: NavigationPhase): boolean {
-  return phase === 'arrived' || phase === 'destination-arrived'
+/** "12 min" → ["12", "min"], so the number can be the hero and the unit small. */
+function durationParts(text: string): [string, string] {
+  const index = text.indexOf(' ')
+  if (index < 0) return [text, '']
+  return [text.slice(0, index), text.slice(index + 1)]
 }
 
 export function NavigationScreen() {
@@ -194,6 +197,34 @@ export function NavigationScreen() {
     ? formatDistance(walkSummary.distanceMeters)
     : null
 
+  const instructionText =
+    nav.instruction ??
+    (leg === 'walk'
+      ? destination
+        ? `Walk to ${destination.name}`
+        : 'Walk to your destination'
+      : mode === 'parking'
+        ? space
+          ? `Drive to ${space.title}`
+          : 'Head to your parking space'
+        : destination
+          ? `Drive to ${destination.name}`
+          : 'Head to your destination')
+
+  const distanceText =
+    arrived || destinationArrived
+      ? 'Arrived'
+      : nav.metersToManeuver > 0
+        ? `In ${formatDistance(nav.metersToManeuver)}`
+        : 'Following route'
+
+  const etaLabel = nav.etaSeconds !== null ? formatDuration(nav.etaSeconds) : null
+  const [etaValue, etaUnit] = etaLabel
+    ? durationParts(
+        `${etaLabel}${leg === 'walk' ? ' walk' : mode === 'parking' ? ' drive' : ''}`,
+      )
+    : ['—', '']
+
   // A near-black route disappears on the dark map style, so the driving line
   // inverts with the theme.
   const routeColor =
@@ -222,95 +253,104 @@ export function NavigationScreen() {
         showRecenter={false}
         interactive
         onDragStart={() => setFollow(false)}
-        bottomInset={210}
+        bottomInset={240}
       />
 
       {/* --- Top: the maneuver ------------------------------------------------ */}
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[1000] space-y-2">
-        <div className="pointer-events-auto flex items-stretch gap-2">
-          <button
-            type="button"
-            aria-label="Exit navigation"
-            onClick={() => navigate(-1)}
-            className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-surface-raised/95 shadow-sm shadow-black/10 backdrop-blur-sm"
-          >
-            <X className="size-5" />
-          </button>
-
-          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-ink px-3.5 py-2.5 text-on-ink shadow-sm shadow-black/20">
-            <ManeuverIcon className="size-7 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-[1px] opacity-70">
-                {arrived
-                  ? 'Arrived'
-                  : destinationArrived
-                    ? 'Arrived'
-                    : nav.metersToManeuver > 0
-                      ? `${formatDistance(nav.metersToManeuver)}`
-                      : 'Following route'}
-              </p>
-              <p className="truncate text-[15px] font-bold leading-tight">
-                {nav.instruction ??
-                  (leg === 'drive'
-                    ? 'Head to your parking space'
-                    : 'Walk to your destination')}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {nav.nextInstruction ? (
-          <p className="pointer-events-auto ml-13 truncate rounded-xl bg-surface-raised/95 px-3 py-1.5 text-[12px] font-medium text-ink-muted shadow-sm shadow-black/5 backdrop-blur-sm">
-            Then {nav.nextInstruction}
-          </p>
-        ) : null}
-      </div>
-
-      {/* --- Recenter / resume ------------------------------------------------ */}
-      <div className="absolute right-3 top-24 z-[1000] flex flex-col gap-2">
-        <button
-          type="button"
-          aria-label={follow ? 'Following your location' : 'Recenter on me'}
-          onClick={() => setFollow(true)}
+      <div className="safe-top pointer-events-none absolute inset-x-4 top-3 z-[1000]">
+        <div
           className={cn(
-            'flex size-11 items-center justify-center rounded-2xl shadow-sm shadow-black/10 backdrop-blur-sm',
-            follow ? 'bg-ink text-on-ink' : 'bg-surface-raised/95',
+            'pointer-events-auto overflow-hidden rounded-2xl border border-line bg-surface-raised',
+            'shadow-[0_8px_24px_rgba(0,0,0,0.07)]',
           )}
         >
-          <LocateFixed className="size-5" />
-        </button>
+          <div className="flex items-center gap-3 p-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-fg">
+              <ManeuverIcon className="size-6" />
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-[17px] font-bold leading-[21px] tracking-[-0.2px]">
+                {instructionText}
+              </p>
+              <p className="mt-0.5 truncate text-[14px] font-semibold leading-[18px] text-brand">
+                {distanceText}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              aria-label="Exit navigation"
+              onClick={() => navigate(-1)}
+              className="flex size-9 shrink-0 items-center justify-center rounded-xl text-ink-faint active:bg-surface"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+
+          {nav.nextInstruction ? (
+            <div className="flex items-center gap-2 border-t border-line px-3 py-2">
+              <span className="shrink-0 text-[11px] font-bold uppercase tracking-[1px] text-ink-muted">
+                Then
+              </span>
+              <ArrowUp
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-ink-soft"
+              />
+              <p className="truncate text-[14px] leading-[17px] text-ink-soft">
+                {nav.nextInstruction}
+              </p>
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      {!follow && nav.isActive ? (
-        <button
-          type="button"
-          onClick={() => setFollow(true)}
-          className="absolute inset-x-3 top-44 z-[1000] rounded-xl bg-surface-raised/95 py-2 text-[12px] font-bold shadow-sm shadow-black/10 backdrop-blur-sm"
-        >
-          Resume following
-        </button>
-      ) : null}
-
       {/* --- Bottom: live ETA. Stops short of the Google wordmark strip. ----- */}
-      <div className="absolute inset-x-3 bottom-9 z-[1000] space-y-2">
+      <div className="safe-bottom absolute inset-x-4 bottom-9 z-[1000] space-y-2">
         {liveUpdatesDown ? (
           <p className="rounded-xl bg-warning-bg px-3 py-2 text-[11px] font-semibold text-warning">
             Live location is unavailable — showing the last known route.
           </p>
         ) : null}
 
+        {/* Recenter sits directly above the card, clear of the map controls. */}
+        <div className="flex items-center justify-end gap-2">
+          {!follow && nav.isActive ? (
+            <button
+              type="button"
+              onClick={() => setFollow(true)}
+              className="rounded-full bg-surface-raised/95 px-3 py-2 text-[12px] font-bold text-ink shadow-[0_4px_12px_rgba(0,0,0,0.04)] backdrop-blur-sm"
+            >
+              Resume following
+            </button>
+          ) : null}
+          <button
+            type="button"
+            aria-label={follow ? 'Following your location' : 'Recenter on me'}
+            onClick={() => setFollow(true)}
+            className={cn(
+              'flex size-11 items-center justify-center rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.04)] backdrop-blur-sm',
+              follow
+                ? 'bg-surface-raised/95 text-brand'
+                : 'bg-brand-fill text-brand-fg',
+            )}
+          >
+            <LocateFixed className="size-5" />
+          </button>
+        </div>
+
         {locationBlocked ? (
-          <div className="rounded-2xl bg-surface-raised p-3 shadow-sm shadow-black/10">
-            <p className="text-[13px] font-bold">
+          <div className={cn('rounded-2xl border border-line bg-surface-raised p-4', CARD_SHADOW)}>
+            <p className="text-[15px] font-bold">
               Location access is needed for live navigation.
             </p>
-            <p className="mt-0.5 text-[12px] text-ink-muted">
+            <p className="mt-1 text-[13px] text-ink-muted">
               {nav.locationError}
             </p>
             <Button
               full
               size="md"
-              className="mt-2.5"
+              className="mt-3"
               onClick={() => window.location.reload()}
             >
               Enable Location
@@ -319,15 +359,15 @@ export function NavigationScreen() {
         ) : null}
 
         {routeFailed ? (
-          <div className="rounded-2xl bg-surface-raised p-3 shadow-sm shadow-black/10">
-            <p className="text-[13px] font-bold">Route unavailable</p>
-            <p className="mt-0.5 text-[12px] text-ink-muted">
+          <div className={cn('rounded-2xl border border-line bg-surface-raised p-4', CARD_SHADOW)}>
+            <p className="text-[15px] font-bold">Route unavailable</p>
+            <p className="mt-1 text-[13px] text-ink-muted">
               {nav.routeError ?? 'We could not calculate a route just now.'}
             </p>
             <Button
               full
               size="md"
-              className="mt-2.5"
+              className="mt-3"
               onClick={() => nav.recalculate()}
             >
               Try again
@@ -338,12 +378,12 @@ export function NavigationScreen() {
         {arrived ? (
           mode === 'general' || !space ? (
             /* General navigation: the destination is the end of the drive. */
-            <div className="rounded-2xl bg-surface-raised p-4 shadow-sm shadow-black/10">
+            <div className={cn('rounded-2xl border border-line bg-surface-raised p-4', CARD_SHADOW)}>
               <p className="flex items-center gap-2 text-[17px] font-bold">
                 <Flag className="size-5 text-success" />
                 You&apos;ve arrived
               </p>
-              <p className="mt-0.5 text-[13px] text-ink-muted">
+              <p className="mt-1 text-[13px] text-ink-muted">
                 {destination?.name ?? 'Your destination'}
               </p>
               <Button
@@ -357,12 +397,12 @@ export function NavigationScreen() {
             </div>
           ) : (
             /* Parking journey: the drive ends at the space, then the walk. */
-            <div className="rounded-2xl bg-surface-raised p-4 shadow-sm shadow-black/10">
+            <div className={cn('rounded-2xl border border-line bg-surface-raised p-4', CARD_SHADOW)}>
               <p className="flex items-center gap-2 text-[17px] font-bold">
                 <Flag className="size-5 text-success" />
                 You&apos;ve arrived
               </p>
-              <p className="mt-0.5 text-[13px] text-ink-muted">
+              <p className="mt-1 text-[13px] text-ink-muted">
                 Parked at {space.title}
               </p>
 
@@ -402,12 +442,12 @@ export function NavigationScreen() {
             </div>
           )
         ) : destinationArrived ? (
-          <div className="rounded-2xl bg-surface-raised p-4 shadow-sm shadow-black/10">
+          <div className={cn('rounded-2xl border border-line bg-surface-raised p-4', CARD_SHADOW)}>
             <p className="flex items-center gap-2 text-[17px] font-bold">
               <Flag className="size-5 text-success" />
               You&apos;ve arrived
             </p>
-            <p className="mt-0.5 text-[13px] text-ink-muted">
+            <p className="mt-1 text-[13px] text-ink-muted">
               {destination?.name ?? 'Your destination'}
             </p>
             <Button
@@ -420,29 +460,18 @@ export function NavigationScreen() {
             </Button>
           </div>
         ) : (
-          <div className="rounded-2xl bg-surface-raised p-3.5 shadow-sm shadow-black/10">
+          <div className={cn('rounded-2xl border border-line bg-surface-raised p-4', CARD_SHADOW)}>
             <div className="flex items-center gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface">
-                {leg === 'drive' ? (
-                  <Car className="size-5 text-ink" />
-                ) : (
-                  <Footprints className="size-5 text-ink" />
-                )}
-              </span>
-
-              <div className="min-w-0 flex-1">
-                <p className="text-[22px] font-bold leading-none tracking-[-0.5px]">
-                  {nav.etaSeconds !== null
-                    ? formatDuration(nav.etaSeconds)
-                    : '—'}
-                </p>
-                <p className="mt-1 truncate text-[12px] font-medium text-ink-muted">
-                  {formatDistance(nav.remainingMeters)}
-                  {nav.etaSeconds !== null
-                    ? ` · arrive ${formatArrivalClock(nav.etaSeconds)}`
-                    : ''}
-                </p>
-              </div>
+              <p className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                <span className="text-[28px] font-extrabold leading-[34px] tracking-[-0.5px]">
+                  {etaValue}
+                </span>
+                {etaUnit ? (
+                  <span className="text-[15px] font-bold uppercase tracking-[0.2px] text-ink-muted">
+                    {etaUnit}
+                  </span>
+                ) : null}
+              </p>
 
               <button
                 type="button"
@@ -459,9 +488,9 @@ export function NavigationScreen() {
                   }
                 }}
                 className={cn(
-                  'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                  'flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors',
                   nav.voice.enabled
-                    ? 'bg-ink text-on-ink'
+                    ? 'bg-brand/10 text-brand'
                     : 'bg-surface text-ink-muted',
                 )}
               >
@@ -473,41 +502,61 @@ export function NavigationScreen() {
               </button>
             </div>
 
+            <div className="my-3 border-t border-line" />
+
+            <div className="flex items-center gap-2">
+              <p className="shrink-0 text-[14px] font-semibold">
+                {formatDistance(nav.remainingMeters)} left
+              </p>
+              {nav.etaSeconds !== null ? (
+                <>
+                  <span aria-hidden="true" className="text-ink-faint">
+                    •
+                  </span>
+                  <p className="min-w-0 flex-1 truncate text-[14px] text-ink-muted">
+                    Arrival: {formatArrivalClock(nav.etaSeconds)}
+                  </p>
+                </>
+              ) : null}
+              <Button
+                variant="danger"
+                size="sm"
+                className="shrink-0 rounded-full px-3.5 text-[12px] font-bold uppercase tracking-[0.4px]"
+                onClick={() => {
+                  nav.stop()
+                  navigate(-1)
+                }}
+              >
+                {mode === 'parking' ? 'Cancel' : 'End'}
+              </Button>
+            </div>
+
             {nav.voice.needsUnlock && nav.voice.enabled ? (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                full
+                size="md"
+                className="mt-3"
                 onClick={() => nav.voice.unlock()}
-                className="mt-2.5 w-full rounded-xl bg-surface py-2 text-[12px] font-bold text-ink"
               >
                 Enable Voice Navigation
-              </button>
+              </Button>
             ) : null}
 
             {leg === 'walk' ? (
-              <p className="mt-2.5 text-[10px] leading-relaxed text-ink-faint">
+              <p className="mt-3 text-[10px] leading-relaxed text-ink-faint">
                 Walking directions may not always have sidewalks or pedestrian
                 paths. Use your judgement.
               </p>
             ) : null}
 
             {nav.phase === 'rerouting' ? (
-              <p className="mt-2.5 text-[11px] font-semibold text-warning">
+              <p className="mt-3 text-[11px] font-semibold text-warning">
                 Recalculating route…
               </p>
             ) : null}
           </div>
         )}
-
-        {!isTerminal(nav.phase) && !locationBlocked && !routeFailed ? (
-          <p className="flex min-w-0 items-center gap-1.5 truncate rounded-xl bg-surface-raised/95 px-3 py-2 text-[11px] font-medium text-ink-muted shadow-sm shadow-black/5 backdrop-blur-sm">
-            <MapPin className="size-3.5 shrink-0" />
-            <span className="truncate">
-                {mode === 'parking' && leg === 'drive'
-                  ? (space?.title ?? 'Parking')
-                  : (destination?.name ?? 'Destination')}
-            </span>
-          </p>
-        ) : null}
       </div>
     </div>
   )

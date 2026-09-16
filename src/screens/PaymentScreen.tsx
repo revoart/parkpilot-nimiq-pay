@@ -1,30 +1,43 @@
 import {
   AlertTriangle,
-  CheckCircle2,
-  Loader2,
+  Check,
+  Copy,
+  ExternalLink,
+  ShieldAlert,
   ShieldCheck,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { AppShell } from '@/components/layout/AppShell'
+import { UsdtMark } from '@/components/brand/UsdtMark'
 import { DestinationCard } from '@/components/journey'
+import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { StateCard } from '@/components/ui/StateCard'
+import { useToast } from '@/components/ui/Toast'
+import { ChainBadge } from '@/components/wallet/ChainBadge'
+import { ConnectWalletPrompt } from '@/components/wallet/ConnectWalletPrompt'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
 import { trackEvent } from '@/lib/analytics/events'
-import { POLYGON_CHAIN_ID } from '@/lib/ethereum/chains'
 import {
   isUserRejection,
   userFacingWalletError,
 } from '@/lib/ethereum/errors'
 import { pollUsdtPayment } from '@/lib/payments'
 import { getReservation, type ReservationDetails } from '@/lib/reservations'
-import { isValidAddress, sendUsdtTransfer, toRawAmount } from '@/lib/usdt'
+import {
+  fromRawAmount,
+  isValidAddress,
+  sendUsdtTransfer,
+  toRawAmount,
+} from '@/lib/usdt'
 import type { Destination } from '@/types'
+import { cn } from '@/utils/cn'
+import { explorerTxUrl } from '@/utils/explorer'
 import { hapticConfirm } from '@/utils/haptics'
 import {
   formatDateLabel,
@@ -41,13 +54,194 @@ type Phase =
   | 'confirmed'
   | 'failed'
 
-const PHASE_MESSAGE: Record<Phase, string> = {
-  review: '',
-  sending: 'Confirm the payment in Nimiq Pay…',
-  submitted: 'Payment submitted. Waiting for confirmation…',
-  verifying: 'Verifying blockchain transaction…',
-  confirmed: 'Payment confirmed.',
-  failed: '',
+const PHASE_STEP: Record<Phase, number> = {
+  review: -1,
+  sending: 0,
+  submitted: 1,
+  verifying: 2,
+  confirmed: 3,
+  failed: -1,
+}
+
+const TRACKER_STEPS = [
+  { label: 'Sign', active: 'Signing' },
+  { label: 'Submit', active: 'Submitting' },
+  { label: 'On-chain check', active: 'Verifying' },
+  { label: 'Receipt', active: 'Receipt' },
+] as const
+
+/** Well-known EVM chains, so a wrong network is named rather than shown raw. */
+const CHAIN_NAMES: Record<string, string> = {
+  '0x1': 'Ethereum Mainnet',
+  '0x89': 'Polygon',
+  '0xa4b1': 'Arbitrum One',
+  '0x2105': 'Base',
+  '0xa': 'OP Mainnet',
+  '0x38': 'BNB Chain',
+  '0xaa36a7': 'Sepolia',
+}
+
+function chainName(chainId: string | null): string {
+  if (!chainId) return 'Unknown network'
+  return CHAIN_NAMES[chainId.toLowerCase()] ?? chainId
+}
+
+function LifecycleTracker({ phase }: { phase: Phase }) {
+  const current = PHASE_STEP[phase]
+
+  if (phase === 'confirmed') {
+    return (
+      <Card>
+        <div
+          className="flex items-center"
+          role="status"
+          aria-label="Payment confirmed"
+        >
+          {TRACKER_STEPS.map((step, index) => (
+            <Fragment key={step.label}>
+              {index > 0 ? <span className="h-0.5 flex-1 bg-success" /> : null}
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-success/50 bg-success-bg text-success">
+                <Check className="size-3.5" strokeWidth={3} />
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      </Card>
+    )
+  }
+
+  if (current < 0) {
+    return (
+      <Card className="space-y-3">
+        <p className="text-[11px] font-extrabold uppercase tracking-[1px] text-ink-muted">
+          Transaction lifecycle (idle)
+        </p>
+        <div
+          className="flex items-center"
+          role="status"
+          aria-label="Payment not started"
+        >
+          {TRACKER_STEPS.map((step, index) => (
+            <Fragment key={step.label}>
+              {index > 0 ? (
+                <span className="h-0.5 flex-1 bg-line-strong" />
+              ) : null}
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong text-[11px] font-bold text-ink-faint">
+                {index + 1}
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      </Card>
+    )
+  }
+
+  const boundary = (index: number) =>
+    index < current
+      ? 'bg-success'
+      : index === current
+        ? 'bg-brand'
+        : 'bg-line-strong'
+
+  return (
+    <Card className="space-y-3">
+      <p className="text-[11px] font-extrabold uppercase tracking-[1px] text-ink-muted">
+        Transaction lifecycle tracker
+      </p>
+      <div className="grid grid-cols-4" role="status" aria-live="polite">
+        {TRACKER_STEPS.map((step, index) => {
+          const state =
+            index < current ? 'done' : index === current ? 'active' : 'todo'
+          return (
+            <div key={step.label} className="flex flex-col items-center gap-2">
+              <div className="flex w-full items-center">
+                <span
+                  className={cn(
+                    'h-0.5 flex-1',
+                    index > 0 ? boundary(index) : 'bg-transparent',
+                  )}
+                />
+                {state === 'done' ? (
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-success/50 bg-success-bg text-success">
+                    <Check className="size-3.5" strokeWidth={3} />
+                  </span>
+                ) : state === 'active' ? (
+                  <span className="flex h-6 shrink-0 items-center rounded-full bg-brand-fill px-2 text-[10px] font-extrabold uppercase leading-none tracking-[0.3px] text-brand-fg">
+                    {step.active}
+                  </span>
+                ) : (
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong text-[11px] font-bold text-ink-faint">
+                    {index + 1}
+                  </span>
+                )}
+                <span
+                  className={cn(
+                    'h-0.5 flex-1',
+                    index < TRACKER_STEPS.length - 1
+                      ? boundary(index + 1)
+                      : 'bg-transparent',
+                  )}
+                />
+              </div>
+              <span
+                className={cn(
+                  'text-center text-[11px] leading-tight',
+                  state === 'active'
+                    ? 'font-bold text-brand'
+                    : state === 'done'
+                      ? 'font-medium text-ink'
+                      : 'text-ink-faint',
+                )}
+              >
+                {step.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+const PROCESSING_COPY = {
+  sending: {
+    title: 'Waiting for your wallet…',
+    subtitle: 'Confirm the transaction in Nimiq Pay to continue.',
+  },
+  submitted: {
+    title: 'Submitting to Polygon…',
+    subtitle: 'Your transaction is being broadcast.',
+  },
+  verifying: {
+    title: 'Verifying on-chain…',
+    subtitle: 'This usually takes 15–30 seconds.',
+  },
+} as const
+
+function ProcessingCard({
+  phase,
+}: {
+  phase: 'sending' | 'submitted' | 'verifying'
+}) {
+  const copy = PROCESSING_COPY[phase]
+
+  return (
+    <Card className="flex flex-col items-center p-6 text-center">
+      <span className="flex size-20 items-center justify-center rounded-full border-2 border-brand bg-brand/10">
+        <span className="flex size-12 items-center justify-center rounded-full bg-brand/20">
+          <span className="size-4 animate-pulse rounded-full bg-brand-fill" />
+        </span>
+      </span>
+      <p
+        className="mt-4 text-[20px] font-extrabold tracking-[-0.3px]"
+        role="status"
+        aria-live="polite"
+      >
+        {copy.title}
+      </p>
+      <p className="mt-1.5 text-[14px] text-ink-muted">{copy.subtitle}</p>
+    </Card>
+  )
 }
 
 function Row({
@@ -56,16 +250,70 @@ function Row({
   mono = false,
 }: {
   label: string
-  value: string
+  value: ReactNode
   mono?: boolean
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-xs text-ink-muted">{label}</span>
-      <span className={mono ? 'font-mono text-xs' : 'text-sm font-medium'}>
+      <span className="text-[14px] text-ink-muted">{label}</span>
+      <span
+        className={cn(
+          'text-right text-[14px] font-semibold',
+          mono && 'font-mono text-[13px]',
+        )}
+      >
         {value}
       </span>
     </div>
+  )
+}
+
+function TransactionProof({
+  txHash,
+  copied,
+  onCopy,
+}: {
+  txHash: string
+  copied: boolean
+  onCopy: () => void
+}) {
+  return (
+    <Card className="space-y-3">
+      <p className="text-[11px] font-extrabold uppercase tracking-[1px] text-ink-muted">
+        Secure transaction proof
+      </p>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[14px] text-ink-muted">Tx Hash</span>
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label="Copy transaction hash"
+            className="inline-flex items-center gap-1.5 rounded-md font-mono text-[13px] font-semibold text-brand"
+          >
+            {shortenAddress(txHash, 4)}
+            {copied ? (
+              <Check className="size-3.5" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[14px] text-ink-muted">Execution Chain</span>
+          <ChainBadge />
+        </div>
+      </div>
+      <a
+        href={explorerTxUrl(txHash)}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-center gap-1.5 border-t border-line pt-3 text-[13px] font-semibold text-brand underline"
+      >
+        View on PolygonScan Explorer
+        <ExternalLink className="size-3.5" />
+      </a>
+    </Card>
   )
 }
 
@@ -73,6 +321,7 @@ export function PaymentScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const wallet = useWallet()
+  const toast = useToast()
 
   const [details, setDetails] = useState<ReservationDetails | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,6 +330,7 @@ export function PaymentScreen() {
   const [phase, setPhase] = useState<Phase>('review')
   const [txHash, setTxHash] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // The destination was snapshotted onto the reservation when it was created.
   const destination = useMemo<Destination | null>(() => {
@@ -160,6 +410,16 @@ export function PaymentScreen() {
     usdtBalanceRaw !== null && usdtBalanceRaw < amountRaw
   const lowGas = wallet.polBalance !== null && Number(wallet.polBalance) < 0.005
 
+  const shortfall =
+    insufficientUsdt && usdtBalanceRaw !== null
+      ? fromRawAmount(amountRaw - usdtBalanceRaw)
+      : null
+
+  const processingPhase: 'sending' | 'submitted' | 'verifying' | null =
+    phase === 'sending' || phase === 'submitted' || phase === 'verifying'
+      ? phase
+      : null
+
   async function handlePay() {
     if (!details || !wallet.address) return
     setMessage(null)
@@ -224,21 +484,35 @@ export function PaymentScreen() {
     }
   }
 
+  async function copyTxHash() {
+    if (!txHash) return
+    try {
+      await navigator.clipboard.writeText(txHash)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard is unavailable in insecure contexts; the hash stays visible.
+    }
+  }
+
+  // There is no fiat on-ramp in the mini app, so "add funds" means topping up
+  // the wallet itself: the address is the actionable thing we can hand over.
+  async function copyWalletAddress() {
+    if (!wallet.address) return
+    try {
+      await navigator.clipboard.writeText(wallet.address)
+      toast.show('Address copied — send USDT on Polygon to top up.', 'success')
+    } catch {
+      toast.show('Could not copy the address. Try again.', 'error')
+    }
+  }
+
   if (!wallet.address) {
     return (
-      <AppShell showBack title="Confirm payment">
-        <EmptyState
-          title="Connect your wallet"
+      <AppShell showBack title="Payment">
+        <ConnectWalletPrompt
+          title="Connect Your Wallet"
           description="Connect Nimiq Pay to review and pay for this reservation."
-          action={
-            <Button
-              size="md"
-              onClick={() => void wallet.connect()}
-              loading={wallet.status === 'connecting'}
-            >
-              Connect Wallet
-            </Button>
-          }
         />
       </AppShell>
     )
@@ -246,10 +520,34 @@ export function PaymentScreen() {
 
   if (loading) {
     return (
-      <AppShell showBack title="Confirm payment">
-        <div className="space-y-3">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-24 w-full" />
+      <AppShell showBack title="Payment">
+        <div className="space-y-4">
+          <div className="flex flex-col items-center px-1 pt-1">
+            <Skeleton className="h-3 w-44" />
+            <div className="mt-3 flex items-center gap-2.5">
+              <Skeleton className="size-9 rounded-full" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-6 w-14" />
+            </div>
+            <Skeleton className="mt-3 h-4 w-48" />
+          </div>
+
+          <Card className="space-y-3">
+            <Skeleton className="h-3 w-52" />
+            <div className="grid grid-cols-4 gap-2">
+              {[0, 1, 2, 3].map((step) => (
+                <div key={step} className="flex flex-col items-center gap-2">
+                  <Skeleton className="size-6 rounded-full" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="space-y-2.5">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+          </Card>
         </div>
       </AppShell>
     )
@@ -257,148 +555,246 @@ export function PaymentScreen() {
 
   if (loadError || !details) {
     return (
-      <AppShell showBack title="Confirm payment">
-        <EmptyState
-          title="Reservation not found"
-          description={loadError ?? 'This reservation is unavailable.'}
-          action={
-            <Button variant="secondary" size="md" onClick={() => navigate('/')}>
-              Back to parking
+      <AppShell showBack title="Payment">
+        <div className="flex min-h-full items-center">
+          <StateCard
+            tone="danger"
+            icon={<ShieldAlert className="size-6" />}
+            title="Reservation unavailable"
+            description={loadError ?? 'This reservation is unavailable.'}
+          >
+            <Button full size="lg" onClick={() => void loadDetails()}>
+              Try Again
             </Button>
-          }
-        />
+            <Button
+              full
+              size="lg"
+              variant="secondary"
+              onClick={() => navigate('/')}
+            >
+              Go Back
+            </Button>
+          </StateCard>
+        </div>
       </AppShell>
     )
   }
 
   const { reservation, parkingSpace } = details
-  const processing =
-    phase === 'sending' || phase === 'submitted' || phase === 'verifying'
+
+  const amountHero = (
+    <section className="flex flex-col items-center px-1 pt-1 text-center">
+      <p className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-muted">
+        Total due to solidify slot
+      </p>
+      <div className="mt-3 flex items-center gap-2.5">
+        <UsdtMark className="size-9" />
+        <span className="text-[44px] font-extrabold leading-none tracking-[-1.5px]">
+          {formatUsdt(reservation.amount_usdt)}
+        </span>
+        <span className="text-[26px] font-extrabold leading-none text-brand">
+          USDT
+        </span>
+      </div>
+      <p className="mt-3 text-[13px] text-ink-muted">{parkingSpace.address}</p>
+    </section>
+  )
+
+  const detailRows = (
+    <div className="space-y-2.5 px-1">
+      <Row label="Listing" value={parkingSpace.title} />
+      <Row label="Date" value={formatDateLabel(reservation.start_at)} />
+      <Row
+        label="Time Window"
+        value={`${formatTimeLabel(reservation.start_at)} – ${formatTimeLabel(reservation.end_at)}`}
+      />
+    </div>
+  )
 
   return (
-    <AppShell showBack title="Confirm payment">
-      <div className="space-y-3">
-        <Card className="space-y-3">
-          <p className="text-sm font-semibold">{parkingSpace.title}</p>
-          <p className="text-xs text-ink-muted">{parkingSpace.address}</p>
-          <div className="space-y-2 border-t border-line pt-3">
-            <Row label="Date" value={formatDateLabel(reservation.start_at)} />
-            <Row
-              label="Time"
-              value={`${formatTimeLabel(reservation.start_at)} – ${formatTimeLabel(reservation.end_at)}`}
-            />
-            <Row label="Amount" value={`${formatUsdt(reservation.amount_usdt)} USDT`} />
-            <Row label="Token" value="USDT" />
-            <Row label="Network" value={`Polygon (${POLYGON_CHAIN_ID})`} />
-            <Row label="Recipient" value={shortenAddress(recipient, 6)} mono />
-          </div>
-          <div className="flex justify-between border-t border-line pt-3">
-            <span className="text-sm font-semibold">Total</span>
-            <span className="text-lg font-bold">
-              {formatUsdt(reservation.amount_usdt)} USDT
-            </span>
-          </div>
-        </Card>
-
-        {destination ? (
-          <DestinationCard
-            destination={destination}
-            route={walkRoute}
-            caption="From this parking"
-          />
-        ) : null}
-
-        {insufficientUsdt ? (
-          <div className="flex items-start gap-2 rounded-card border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <span>
-              <span className="font-semibold">Insufficient USDT.</span> You have{' '}
-              {formatUsdt(wallet.usdtBalance ?? '0')} USDT, but need{' '}
-              {formatUsdt(reservation.amount_usdt)} USDT. Add USDT to continue.
-            </span>
-          </div>
-        ) : null}
-
-        {lowGas ? (
-          <div className="flex items-start gap-2 rounded-card border border-warning/30 bg-warning-bg p-3 text-xs text-warning">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <span>
-              <span className="font-semibold">Network fee required.</span> Your
-              wallet needs a small amount of POL for the Polygon network fee.
-              This is not a ParkPilot charge — the parking price above is the
-              full amount ParkPilot receives.
-            </span>
-          </div>
-        ) : null}
-
-        {wallet.address && !wallet.onPolygon ? (
-          <div className="flex items-start gap-2 rounded-card border border-warning/30 bg-warning-bg p-3 text-xs text-warning">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <span>
-              <span className="font-semibold">Switch to Polygon.</span> ParkPilot
-              uses Polygon for USDT payments.{' '}
-              <button
-                type="button"
-                onClick={() => void wallet.connect()}
-                className="font-semibold underline"
-              >
-                Switch network
-              </button>
-            </span>
-          </div>
-        ) : null}
-
-        {processing ? (
-          <Card className="flex items-center gap-3">
-            <Loader2 className="size-5 animate-spin text-accent" />
-            <p
-              className="text-sm font-medium"
-              role="status"
-              aria-live="polite"
-            >
-              {PHASE_MESSAGE[phase]}
-            </p>
-          </Card>
-        ) : null}
-
+    <AppShell showBack title="Payment">
+      <div className="space-y-4">
         {phase === 'confirmed' ? (
-          <Card className="flex items-center gap-3">
-            <CheckCircle2 className="size-5 text-success" />
-            <p
-              className="text-sm font-medium"
-              role="status"
-              aria-live="polite"
-            >
-              Payment confirmed.
-            </p>
-          </Card>
-        ) : null}
-
-        {message ? <p className="text-sm text-danger">{message}</p> : null}
-
-        {phase === 'failed' || phase === 'review' ? (
           <>
-            <Button
-              onClick={() => void handlePay()}
-              disabled={insufficientUsdt || !wallet.onPolygon}
-            >
-              {phase === 'failed'
-                ? 'Try Again'
-                : `Pay ${formatUsdt(reservation.amount_usdt)} USDT`}
-            </Button>
-            <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-muted">
-              <ShieldCheck className="size-3.5" />
-              Confirmed in Nimiq Pay. Verified on Polygon before your pass is
-              issued.
-            </p>
-          </>
-        ) : null}
+            <LifecycleTracker phase={phase} />
 
-        {txHash && phase !== 'confirmed' ? (
-          <p className="break-all text-center font-mono text-[10px] text-ink-muted">
-            {txHash}
-          </p>
-        ) : null}
+            <Card className="flex flex-col items-center p-6 text-center">
+              <span className="flex size-16 items-center justify-center rounded-full border-2 border-success/60 bg-success-bg">
+                <Check className="size-8 text-success" strokeWidth={2.5} />
+              </span>
+              <p
+                className="mt-3 text-[22px] font-extrabold tracking-[-0.4px]"
+                role="status"
+                aria-live="polite"
+              >
+                Payment Confirmed
+              </p>
+              <span className="mt-2 inline-flex items-center rounded-full border border-success/40 bg-success-bg px-3 py-1 text-[11px] font-bold uppercase tracking-[0.4px] text-success">
+                {formatUsdt(reservation.amount_usdt)} USDT PAID ON-CHAIN
+              </span>
+            </Card>
+
+            {txHash ? (
+              <TransactionProof
+                txHash={txHash}
+                copied={copied}
+                onCopy={() => void copyTxHash()}
+              />
+            ) : null}
+
+            <Button
+              full
+              size="lg"
+              onClick={() => navigate(`/pass/${reservation.id}`)}
+            >
+              View Parking Pass
+            </Button>
+          </>
+        ) : processingPhase ? (
+          <>
+            {amountHero}
+            <LifecycleTracker phase={phase} />
+            <ProcessingCard phase={processingPhase} />
+            {detailRows}
+            {destination ? (
+              <DestinationCard
+                destination={destination}
+                route={walkRoute}
+                caption="From this parking"
+              />
+            ) : null}
+          </>
+        ) : !wallet.onPolygon ? (
+          <>
+            <Card className="flex items-center justify-between gap-4">
+              <span className="text-[14px] text-ink-muted">
+                Selected Network
+              </span>
+              <span className="text-[15px] font-bold text-danger">
+                {chainName(wallet.chainId)}
+              </span>
+            </Card>
+
+            <div className="rounded-2xl border border-danger/40 bg-danger-bg p-4">
+              <p className="flex items-center gap-2 text-[15px] font-bold text-danger">
+                <span className="size-2 rounded-full bg-danger" />
+                Wrong Network
+              </p>
+              <p className="mt-2 text-[14px] leading-5 text-danger">
+                Please switch to Polygon network in your wallet to complete
+                this payment.
+              </p>
+              <Button
+                full
+                size="lg"
+                variant="danger"
+                className="mt-3 bg-danger text-white"
+                onClick={() => void wallet.connect()}
+                loading={wallet.status === 'connecting'}
+              >
+                Switch Network
+              </Button>
+            </div>
+
+            <LifecycleTracker phase="review" />
+          </>
+        ) : insufficientUsdt ? (
+          <>
+            <Card className="flex items-center justify-between gap-4">
+              <span className="text-[14px] text-ink-muted">
+                Total Amount Due
+              </span>
+              <span className="text-[15px] font-bold">
+                {formatUsdt(reservation.amount_usdt)} USDT
+              </span>
+            </Card>
+
+            <div className="rounded-2xl border border-warning/40 bg-warning-bg p-4">
+              <p className="flex items-center gap-2 text-[15px] font-bold text-warning">
+                <span className="size-2 rounded-full bg-warning" />
+                Insufficient USDT
+              </p>
+              <p className="mt-2 text-[14px] leading-5 text-warning">
+                You need {formatUsdt(reservation.amount_usdt)} USDT but only
+                have {formatUsdt(wallet.usdtBalance ?? '0')} USDT in your
+                wallet
+                {shortfall ? ` — ${formatUsdt(shortfall)} USDT short.` : '.'}{' '}
+                Add funds to continue.
+              </p>
+              <Button
+                full
+                size="lg"
+                variant="warning"
+                className="mt-3 border-transparent bg-star text-white"
+                onClick={() => void copyWalletAddress()}
+              >
+                Add Funds
+              </Button>
+            </div>
+
+            <LifecycleTracker phase="review" />
+          </>
+        ) : (
+          <>
+            {amountHero}
+            <LifecycleTracker phase={phase} />
+
+            {lowGas ? (
+              <div className="flex items-start gap-2 rounded-2xl bg-warning-bg p-3.5 text-[13px] text-warning">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  <span className="font-semibold">Network fee required.</span>{' '}
+                  Your wallet needs a small amount of POL for the Polygon
+                  network fee. This is not a ParkPilot charge — the parking
+                  price above is the full amount ParkPilot receives.
+                </span>
+              </div>
+            ) : null}
+
+            {message ? (
+              <div className="flex items-start gap-2 rounded-2xl bg-danger-bg p-3.5 text-[13px] text-danger">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>{message}</span>
+              </div>
+            ) : null}
+
+            {detailRows}
+
+            {destination ? (
+              <DestinationCard
+                destination={destination}
+                route={walkRoute}
+                caption="From this parking"
+              />
+            ) : null}
+
+            {txHash ? (
+              <TransactionProof
+                txHash={txHash}
+                copied={copied}
+                onCopy={() => void copyTxHash()}
+              />
+            ) : null}
+
+            <div className="space-y-3 pt-1">
+              <Button
+                full
+                size="lg"
+                onClick={() => void handlePay()}
+                disabled={insufficientUsdt || !wallet.onPolygon}
+              >
+                {phase === 'failed'
+                  ? 'Try Again'
+                  : `Pay ${formatUsdt(reservation.amount_usdt)} USDT`}
+              </Button>
+              <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-muted">
+                <ShieldCheck className="size-3.5" />
+                Confirmed in Nimiq Pay. Verified on Polygon before your pass is
+                issued.
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </AppShell>
   )

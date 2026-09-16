@@ -26,6 +26,20 @@ describe('mapInitOptions', () => {
     expect(options.colorScheme).toBe('LIGHT')
   })
 
+  it('asks for vector rendering whenever a Map ID is set', () => {
+    // A Map ID configured as Raster — or one from a project the key cannot
+    // see — would otherwise leave the map on the raster renderer, where
+    // rotation is silently ignored. `renderingType` overrides the Map ID.
+    expect(mapInitOptions('light', 'map-abc').renderingType).toBe('VECTOR')
+    expect(mapInitOptions('dark', 'map-abc').renderingType).toBe('VECTOR')
+  })
+
+  it('does not ask for vector rendering without a Map ID', () => {
+    // Without a Map ID there is no vector renderer to fall back from, and the
+    // inline palette is what styles the map.
+    expect(mapInitOptions('light', null).renderingType).toBeUndefined()
+  })
+
   it('selects the dark colour scheme for a vector map in dark mode', () => {
     expect(mapInitOptions('dark', 'map-abc').colorScheme).toBe('DARK')
   })

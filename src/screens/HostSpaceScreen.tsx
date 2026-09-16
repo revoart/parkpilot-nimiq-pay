@@ -1,4 +1,4 @@
-import { ImagePlus, SquareParking, Trash2 } from 'lucide-react'
+import { SquareParking } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -21,6 +21,10 @@ import {
   type HostSpace,
 } from '@/lib/host'
 import { cn } from '@/utils/cn'
+import { formatUsdt } from '@/utils/format'
+
+const FIELD_LABEL =
+  'text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint'
 
 const TYPES = [
   { value: 'garage', label: 'Garage' },
@@ -208,7 +212,7 @@ export function HostSpaceScreen() {
 
   if (!wallet.address) {
     return (
-      <HostShell showBack title="Edit listing" showNav={false}>
+      <HostShell showBack title="Edit Space" showNav={false}>
         <EmptyState
           icon={<SquareParking className="size-5" />}
           title="Connect your wallet"
@@ -225,7 +229,7 @@ export function HostSpaceScreen() {
 
   if (loading) {
     return (
-      <HostShell showBack title="Edit listing" showNav={false}>
+      <HostShell showBack title="Edit Space" showNav={false}>
         <div className="space-y-3">
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-32 w-full" />
@@ -237,7 +241,7 @@ export function HostSpaceScreen() {
 
   if (loadError || !space) {
     return (
-      <HostShell showBack title="Edit listing" showNav={false}>
+      <HostShell showBack title="Edit Space" showNav={false}>
         <EmptyState
           title="Listing not found"
           description={
@@ -254,31 +258,36 @@ export function HostSpaceScreen() {
   }
 
   return (
-    <HostShell showBack title="Edit listing" showNav={false}>
+    <HostShell showBack title="Edit Space" showNav={false}>
       <div className="space-y-3">
-        <Card className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-ink">
-              <SquareParking className="size-4 text-on-ink" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold">{space.title}</p>
-              <p className="text-xs text-ink-muted">
-                {space.stats.bookings} bookings · {space.stats.earned} USDT earned
+        <Card className="flex items-center gap-3 border border-line p-2.5">
+          <ListingPhoto
+            imageUrl={photoPreview ?? photoUrl}
+            title={space.title}
+            className="size-16 shrink-0 rounded-xl"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className="truncate text-[16px] font-bold tracking-[-0.3px]">
+                {title || space.title}
               </p>
+              <StatusPill
+                tone={space.active ? 'success' : 'neutral'}
+                className="shrink-0 uppercase tracking-[0.4px]"
+              >
+                {space.active ? 'Active' : 'Paused'}
+              </StatusPill>
             </div>
+            <p className="mt-0.5 truncate text-[13px] text-ink-muted">
+              {address || space.address}
+            </p>
+            <p className="mt-0.5 text-[14px] font-bold text-brand">
+              {formatUsdt(price || space.price_usdt)} USDT/hr
+            </p>
           </div>
-          <StatusPill tone={space.active ? 'success' : 'neutral'}>
-            {space.active ? 'Active' : 'Paused'}
-          </StatusPill>
         </Card>
 
-        <Card className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold">Parking photo</p>
-            <span className="text-[11px] text-ink-muted">1 photo</span>
-          </div>
-
+        <Card className="space-y-3 border border-line">
           <input
             ref={fileInput}
             type="file"
@@ -290,46 +299,31 @@ export function HostSpaceScreen() {
             }
           />
 
-          <div className="relative overflow-hidden rounded-2xl">
-            {photoUrl || photoPreview ? (
-              <img
-                src={photoUrl ?? photoPreview ?? ''}
-                alt={space.title}
-                className="h-36 w-full bg-map object-cover"
-              />
-            ) : (
-              <ListingPhoto
-                imageUrl={null}
-                title={space.title}
-                className="h-36 w-full"
-              />
-            )}
-            {photoUploading ? (
-              <span className="absolute inset-x-0 bottom-0 bg-ink/75 py-2 text-center text-[11px] font-semibold text-on-ink">
-                Uploading…
-              </span>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-line-strong px-3.5 py-2.5 text-[13px] font-semibold"
-            >
-              <ImagePlus className="size-4" />
-              {photoUrl ? 'Replace Photo' : 'Add Photo'}
-            </button>
-            {photoUrl ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[15px] font-semibold">Space Photograph</p>
+            <div className="flex items-center gap-3">
+              {photoUrl ? (
+                <button
+                  type="button"
+                  onClick={clearPhoto}
+                  className="text-[13px] font-semibold text-ink-muted"
+                >
+                  Remove
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={clearPhoto}
-                className="rounded-xl px-3.5 py-2.5 text-[13px] font-semibold text-ink-muted"
+                onClick={() => fileInput.current?.click()}
+                className="rounded-xl bg-brand/12 px-4 py-2 text-[13px] font-bold text-brand"
               >
-                Remove
+                {photoUrl || photoPreview ? 'Change Photo' : 'Add Photo'}
               </button>
-            ) : null}
+            </div>
           </div>
+
+          {photoUploading ? (
+            <p className="text-[12px] font-medium text-ink-muted">Uploading…</p>
+          ) : null}
 
           {photoRemoved && !photoUrl ? (
             <p className="rounded-xl bg-warning-bg px-3 py-2 text-xs font-medium text-warning">
@@ -341,55 +335,43 @@ export function HostSpaceScreen() {
           ) : null}
         </Card>
 
-        <Card className="space-y-3">
+        <Card className="space-y-3.5 border border-line">
           <div className="space-y-1.5">
-            <label
-              htmlFor="space-name"
-              className="text-xs font-semibold text-ink-soft"
-            >
-              Name
+            <label htmlFor="space-name" className={FIELD_LABEL}>
+              Listing Title
             </label>
             <input
               id="space-name"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              className="w-full rounded-xl bg-surface px-3.5 py-3 text-[14px] outline-none"
+              className="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-[15px] outline-none"
             />
           </div>
           <div className="space-y-1.5">
-            <label
-              htmlFor="space-address"
-              className="text-xs font-semibold text-ink-soft"
-            >
+            <label htmlFor="space-address" className={FIELD_LABEL}>
               Address
             </label>
             <input
               id="space-address"
               value={address}
               onChange={(event) => setAddress(event.target.value)}
-              className="w-full rounded-xl bg-surface px-3.5 py-3 text-[14px] outline-none"
+              className="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-[15px] outline-none"
             />
           </div>
           <div className="space-y-1.5">
-            <label
-              htmlFor="space-price"
-              className="text-xs font-semibold text-ink-soft"
-            >
-              Hourly price (USDT)
+            <label htmlFor="space-price" className={FIELD_LABEL}>
+              Price (USDT per hour)
             </label>
             <input
               id="space-price"
               value={price}
               onChange={(event) => setPrice(event.target.value)}
               inputMode="decimal"
-              className="w-full rounded-xl bg-surface px-3.5 py-3 text-[14px] outline-none"
+              className="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-[15px] font-bold text-brand outline-none"
             />
           </div>
           <div className="space-y-1.5">
-            <label
-              htmlFor="space-description"
-              className="text-xs font-semibold text-ink-soft"
-            >
+            <label htmlFor="space-description" className={FIELD_LABEL}>
               Description
             </label>
             <textarea
@@ -397,13 +379,13 @@ export function HostSpaceScreen() {
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               rows={3}
-              className="w-full resize-none rounded-xl bg-surface px-3.5 py-3 text-[13px] outline-none"
+              className="w-full resize-none rounded-2xl border border-line bg-surface px-4 py-3 text-[14px] outline-none"
             />
           </div>
         </Card>
 
-        <Card className="space-y-2">
-          <p className="text-sm font-semibold">Type</p>
+        <Card className="space-y-2 border border-line">
+          <p className={FIELD_LABEL}>Parking Space Type</p>
           <div className="grid grid-cols-2 gap-2">
             {TYPES.map((type) => (
               <button
@@ -411,10 +393,10 @@ export function HostSpaceScreen() {
                 type="button"
                 onClick={() => setParkingType(type.value)}
                 className={cn(
-                  'rounded-xl border py-3 text-sm font-semibold transition',
+                  'rounded-full border py-3 text-[14px] font-bold transition',
                   parkingType === type.value
-                    ? 'border-ink bg-ink text-on-ink'
-                    : 'border-line text-ink',
+                    ? 'border-brand-fill bg-brand-fill text-brand-fg shadow-[0_4px_12px_rgba(76,130,255,0.12)]'
+                    : 'border-line bg-surface-raised text-ink',
                 )}
               >
                 {type.label}
@@ -423,7 +405,7 @@ export function HostSpaceScreen() {
           </div>
         </Card>
 
-        <Card className="overflow-hidden p-0">
+        <Card className="overflow-hidden border border-line p-0">
           {(
             [
               ['Covered', covered, setCovered],
@@ -432,8 +414,8 @@ export function HostSpaceScreen() {
             ] as [string, boolean, (value: boolean) => void][]
           ).map(([label, value, setter], index, arr) => (
             <div key={label}>
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-[15px] font-medium">{label}</span>
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-[14px] font-semibold">{label}</span>
                 <Toggle
                   on={value}
                   ariaLabel={label}
@@ -465,16 +447,16 @@ export function HostSpaceScreen() {
         <Button
           full
           size="lg"
-          variant="secondary"
+          variant="warning"
           onClick={() => void handleToggleActive()}
           disabled={saving}
         >
-          {space.active ? 'Pause listing' : 'Activate listing'}
+          {space.active ? 'Pause Listing' : 'Activate Listing'}
         </Button>
 
         {confirmDelete ? (
-          <Card className="space-y-3">
-            <p className="text-sm font-semibold">Delete this listing?</p>
+          <Card className="space-y-3 border border-line">
+            <p className="text-[15px] font-bold">Delete this listing?</p>
             <p className="text-xs text-ink-muted">
               This cannot be undone. Listings with bookings cannot be deleted —
               pause them instead.
@@ -500,15 +482,13 @@ export function HostSpaceScreen() {
             </div>
           </Card>
         ) : (
-          <Button
-            full
-            size="lg"
-            variant="ghost"
+          <button
+            type="button"
             onClick={() => setConfirmDelete(true)}
+            className="w-full py-2 text-center text-[15px] font-bold text-danger"
           >
-            <Trash2 className="mr-2 size-4" />
-            Delete listing
-          </Button>
+            Delete Listing Permanent
+          </button>
         )}
       </div>
     </HostShell>

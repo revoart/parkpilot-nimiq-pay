@@ -46,6 +46,10 @@ export interface NearbyParkingSpace extends ParkingSpace {
    * constraint uses.
    */
   busy_until: string | null
+  /** Mean review score, or null when the listing has no reviews yet. */
+  rating_avg: number | null
+  /** How many reviews `rating_avg` is based on. Zero when there are none. */
+  rating_count: number
 }
 
 export interface ParkingSpacePhoto {
@@ -176,4 +180,62 @@ export interface VerifyPaymentResult {
   block_number: number | null
   explorer_url: string
   reason?: string
+}
+
+/* ── Driver ↔ host chat ──────────────────────────────────────────────────────
+ * A thread belongs to a reservation, so both parties always have a booking in
+ * common. Everything here is produced by the chat Edge Functions.
+ */
+
+export interface ChatMessage {
+  id: string
+  body: string
+  created_at: string
+  /** True when the signed-in wallet sent it. */
+  is_mine: boolean
+}
+
+/** The other participant. `phone` is null unless they opted in and the booking is live. */
+export interface ChatContact {
+  display_name: string | null
+  avatar_url: string | null
+  phone: string | null
+}
+
+export interface ChatThread {
+  reservation_id: string
+  is_driver: boolean
+  role: 'driver' | 'host'
+  space_title: string
+  space_image_url: string | null
+  status: ReservationStatus
+  start_at: string
+  end_at: string
+}
+
+export interface ConversationSummary {
+  reservation_id: string
+  is_driver: boolean
+  role: 'driver' | 'host'
+  space_title: string
+  space_image_url: string | null
+  status: ReservationStatus
+  start_at: string
+  end_at: string
+  last_message_at: string | null
+  last_message_body: string | null
+  /** Null when the thread has no messages yet. */
+  last_message_is_mine: boolean | null
+  unread_count: number
+  /** Shown when the counterparty has not set a display name. */
+  counterparty_address: string
+  contact: ChatContact
+}
+
+export interface ChatThreadResult {
+  messages: ChatMessage[]
+  /** Send this back as `since` on the next poll; it is the database's own value. */
+  next_cursor: string | null
+  thread: ChatThread
+  contact: ChatContact
 }

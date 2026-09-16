@@ -710,6 +710,8 @@ export type Database = {
           image_url: string | null
           distance_m: number
           busy_until: string | null
+          rating_avg: number | null
+          rating_count: number
         }[]
       }
       request_payout: {

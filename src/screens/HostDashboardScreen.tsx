@@ -1,4 +1,4 @@
-import { ChevronRight, Plus, SquareParking } from 'lucide-react'
+import { House, Plus, RefreshCw, SquareParking } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -29,7 +29,7 @@ export function HostDashboardScreen() {
 
   const [spaces, setSpaces] = useState<HostSpace[]>([])
   const [bookings, setBookings] = useState<HostBooking[]>([])
-  const [earnedToday, setEarnedToday] = useState(0)
+  const [earnedAllTime, setEarnedAllTime] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<HostSpace | null>(null)
@@ -69,7 +69,7 @@ export function HostDashboardScreen() {
       ])
       setSpaces(spaceList)
       setBookings(bookingList)
-      setEarnedToday(earnings.today)
+      setEarnedAllTime(earnings.allTime)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load.')
     } finally {
@@ -98,7 +98,7 @@ export function HostDashboardScreen() {
 
   if (!wallet.address) {
     return (
-      <HostShell title="Your parking" subtitle="Host">
+      <HostShell title="Host Dashboard">
         <EmptyState
           icon={<SquareParking className="size-5" />}
           title="Connect your wallet"
@@ -114,62 +114,135 @@ export function HostDashboardScreen() {
   }
 
   return (
-    <HostShell title="Your parking" subtitle="Host">
+    <HostShell title="Host Dashboard">
       {loading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-32 w-full" />
+        <div className="space-y-5" aria-busy="true">
+          <div className="grid grid-cols-3 gap-2.5">
+            {[0, 1, 2].map((stat) => (
+              <div
+                key={stat}
+                className="rounded-2xl bg-surface-raised px-3 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+              >
+                <Skeleton className="h-3 w-16 rounded-full" />
+                <Skeleton className="mt-2 h-5 w-12 rounded-full" />
+              </div>
+            ))}
+          </div>
+
+          <section className="space-y-2.5">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint">
+              My parking spaces
+            </h2>
+            <div className="space-y-2.5">
+              {[0, 1].map((card) => (
+                <div
+                  key={card}
+                  className="flex items-center gap-3 rounded-2xl bg-surface-raised p-2.5 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+                >
+                  <Skeleton className="size-16 shrink-0 rounded-xl" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Skeleton className="h-4 w-2/3 rounded-full" />
+                      <Skeleton className="h-5 w-14 shrink-0 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-1/2 rounded-full" />
+                    <Skeleton className="h-3.5 w-24 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-2.5">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint">
+              Upcoming bookings
+            </h2>
+            <div className="space-y-2.5">
+              {[0, 1].map((card) => (
+                <div
+                  key={card}
+                  className="flex items-start justify-between gap-3 rounded-2xl bg-surface-raised p-3.5 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-2/3 rounded-full" />
+                    <Skeleton className="h-3 w-3/4 rounded-full" />
+                    <Skeleton className="h-3 w-1/2 rounded-full" />
+                  </div>
+                  <Skeleton className="h-5 w-20 shrink-0 rounded-full" />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <Skeleton className="h-12 w-full rounded-xl" />
         </div>
       ) : error ? (
         <EmptyState
+          tone="danger"
           title="Couldn't load your dashboard"
           description={error}
           action={
-            <Button variant="secondary" size="md" onClick={() => void load()}>
+            <Button full size="md" onClick={() => void load()}>
+              <RefreshCw className="mr-2 size-4" />
               Retry
             </Button>
           }
         />
       ) : (
-        <div className="space-y-3">
-          <div className="flex gap-2">
+        <div className="space-y-5">
+          <div className="grid grid-cols-3 gap-2.5">
             {[
-              { value: String(activeSpaces), label: 'spaces live' },
-              { value: formatUsdt(earnedToday), label: 'USDT today' },
-              { value: String(upcoming.length), label: 'upcoming' },
+              { label: 'Earnings', value: formatUsdt(earnedAllTime), tether: true },
+              { label: 'Active spaces', value: String(activeSpaces), tether: false },
+              { label: 'Bookings', value: String(bookings.length), tether: false },
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="flex-1 rounded-xl bg-surface-raised px-2.5 py-2.5 text-center"
+                className="rounded-2xl bg-surface-raised px-3 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
               >
-                <p className="text-[19px] font-bold leading-none tracking-[-0.4px]">
-                  {stat.value}
-                </p>
-                <p className="mt-1 text-[10px] font-medium leading-tight text-ink-muted">
+                <p className="text-[10px] font-bold uppercase leading-none tracking-[0.6px] text-ink-faint">
                   {stat.label}
+                </p>
+                <p className="mt-1.5 flex items-center gap-1 text-[20px] font-extrabold leading-none tracking-[-0.5px]">
+                  {stat.tether ? (
+                    <span aria-hidden="true" className="text-[15px] text-success">
+                      ₮
+                    </span>
+                  ) : null}
+                  {stat.value}
                 </p>
               </div>
             ))}
           </div>
 
-          <div className="rounded-2xl bg-surface-raised p-3.5">
-            <div className="mb-2.5 flex items-center justify-between">
-              <p className="text-[14px] font-bold">Your spaces</p>
+          <section className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint">
+                My parking spaces
+              </h2>
               <button
                 type="button"
                 onClick={() => navigate('/host/add')}
-                className="text-[12px] font-bold"
+                className="text-[12px] font-bold text-brand"
               >
                 + Add
               </button>
             </div>
 
             {spaces.length === 0 ? (
-              <p className="py-1.5 text-[13px] text-ink-muted">
-                No listings yet. Add your first parking space.
-              </p>
+              <EmptyState
+                icon={<House className="size-6" />}
+                title="No parking spaces yet"
+                description="List your first parking space and start earning USDT."
+                action={
+                  <Button full size="md" onClick={() => navigate('/host/add')}>
+                    <Plus className="mr-2 size-4" />
+                    Add Parking Space
+                  </Button>
+                }
+              />
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2.5">
                 {spaces.slice(0, 5).map((space) => (
                   <SwipeToDelete
                     key={space.id}
@@ -179,71 +252,75 @@ export function HostDashboardScreen() {
                     <button
                       type="button"
                       onClick={() => navigate(`/host/space/${space.id}`)}
-                      className="flex w-full items-center justify-between gap-2.5 rounded-xl bg-surface px-3 py-2.5 text-left active:opacity-80"
+                      className="flex w-full items-center gap-3 rounded-2xl bg-surface-raised p-2.5 text-left shadow-[0_4px_12px_rgba(0,0,0,0.04)] active:opacity-80"
                     >
-                    <div className="flex min-w-0 items-center gap-2.5">
                       <ListingPhoto
                         imageUrl={space.image_url}
                         title={space.title}
-                        className="size-9 shrink-0 rounded-xl"
+                        className="size-16 shrink-0 rounded-xl"
                       />
-                      <div className="min-w-0">
-                        <p className="truncate text-[14px] font-bold">
-                          {space.title}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-[16px] font-bold tracking-[-0.3px]">
+                            {space.title}
+                          </p>
+                          <StatusPill tone={space.active ? 'success' : 'neutral'}>
+                            {space.active ? 'Active' : 'Paused'}
+                          </StatusPill>
+                        </div>
+                        <p className="mt-0.5 truncate text-[13px] text-ink-muted">
+                          {space.address}
                         </p>
-                        <p className="truncate text-[11px] text-ink-muted">
-                          {formatUsdt(space.price_usdt)}/hr · {space.address}
+                        <p className="mt-0.5 text-[14px] font-bold text-brand">
+                          {formatUsdt(space.price_usdt)} USDT/hr
                         </p>
                       </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <StatusPill tone={space.active ? 'success' : 'neutral'}>
-                        {space.active ? 'Active' : 'Paused'}
-                      </StatusPill>
-                      <ChevronRight className="size-3.5 text-ink-faint" />
-                    </div>
                     </button>
                   </SwipeToDelete>
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="rounded-2xl bg-surface-raised p-3.5">
-            <p className="mb-2.5 text-[14px] font-bold">Upcoming bookings</p>
+          <section className="space-y-2.5">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint">
+              Upcoming bookings
+            </h2>
             {upcoming.length === 0 ? (
-              <p className="py-2 text-sm text-ink-muted">
-                No upcoming bookings yet.
-              </p>
+              <div className="rounded-2xl bg-surface-raised px-4 py-5 text-center shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+                <p className="text-[14px] text-ink-muted">
+                  No upcoming bookings
+                </p>
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {upcoming.slice(0, 3).map((booking) => (
                   <div
                     key={booking.id}
-                    className="flex items-center justify-between gap-3"
+                    className="flex items-start justify-between gap-3 rounded-2xl bg-surface-raised p-3.5 shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[14px] font-semibold">
+                      <p className="truncate text-[16px] font-bold tracking-[-0.3px]">
                         {booking.parkingSpaceTitle}
                       </p>
-                      <p className="text-xs text-ink-muted">
+                      <p className="mt-0.5 text-[13px] text-ink-muted">
                         {formatDateLabel(booking.startAt)} ·{' '}
                         {formatTimeLabel(booking.startAt)} –{' '}
                         {formatTimeLabel(booking.endAt)}
                       </p>
                     </div>
-                    <p className="shrink-0 text-[14px] font-bold">
-                      {formatUsdt(booking.amountUsdt)}
+                    <p className="shrink-0 text-[15px] font-bold text-success">
+                      {formatUsdt(booking.amountUsdt)} USDT
                     </p>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
           <Button full size="lg" onClick={() => navigate('/host/add')}>
-            <Plus className="mr-2 size-4 opacity-70" />
-            Add parking space
+            <Plus className="mr-2 size-4" />
+            Add Parking Space
           </Button>
         </div>
       )}

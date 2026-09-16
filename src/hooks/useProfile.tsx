@@ -15,10 +15,12 @@ interface ProfileContextValue {
   profile: Profile | null
   loading: boolean
   error: string | null
-  /** Saves the shared name/bio. Visible in both Driver and Host. */
+  /** Saves the shared name/bio/phone. Visible in both Driver and Host. */
   save: (input: {
     displayName?: string | null
     bio?: string | null
+    phone?: string | null
+    phoneShared?: boolean
   }) => Promise<void>
   /** Uploads and persists the shared profile photo. */
   setAvatar: (file: File) => Promise<void>
@@ -61,7 +63,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const save = useCallback(
-    async (input: { displayName?: string | null; bio?: string | null }) => {
+    async (input: {
+      displayName?: string | null
+      bio?: string | null
+      phone?: string | null
+      phoneShared?: boolean
+    }) => {
       if (!wallet.address) throw new Error('Connect your wallet first.')
       setProfile(await updateProfile(wallet.address, input))
     },

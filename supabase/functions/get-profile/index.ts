@@ -36,7 +36,9 @@ Deno.serve(async (request) => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('display_name, bio, avatar_url, nmiq_address, evm_address')
+      .select(
+        'display_name, bio, avatar_url, nmiq_address, evm_address, phone, phone_shared',
+      )
       .ilike('evm_address', owner)
       .maybeSingle()
 
@@ -49,6 +51,10 @@ Deno.serve(async (request) => {
         avatar_url: data?.avatar_url ?? null,
         nmiq_address: data?.nmiq_address ?? null,
         evm_address: data?.evm_address ?? owner,
+        // The owner's own number, so it is returned regardless of the sharing
+        // flag — they can always see and edit what they entered.
+        phone: data?.phone ?? null,
+        phone_shared: Boolean(data?.phone_shared),
       },
     })
   } catch (error) {

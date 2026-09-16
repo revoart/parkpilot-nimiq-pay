@@ -73,3 +73,24 @@ verify_jwt = false
 
 [functions.upload-parking-photo]
 verify_jwt = false
+
+[functions.list-conversations]
+verify_jwt = false
+
+[functions.list-messages]
+verify_jwt = false
+
+[functions.send-message]
+verify_jwt = false
+
+[functions.payout-config]
+verify_jwt = false
+
+[functions.begin-payout-send]
+verify_jwt = false
+
+[functions.record-payout-send]
+verify_jwt = false
+
+[functions.fail-payout]
+verify_jwt = false

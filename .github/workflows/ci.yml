@@ -20,14 +20,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node 24 runs the operator tooling in scripts/ directly: type stripping
+      # landed in 22.18, so an older Node cannot execute the .ts files there.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      # First, and deliberately before anything else: a committed treasury key
+      # is the one failure that cannot be undone by a later commit.
+      - name: Check for committed secrets
+        run: npm run check:secrets
 
       - name: Typecheck
         run: npm run typecheck

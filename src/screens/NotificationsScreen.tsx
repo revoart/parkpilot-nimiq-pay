@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, Check, Clock } from 'lucide-react'
+import { AlertTriangle, Bell, CheckCircle2, Clock, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -7,11 +7,15 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useWallet } from '@/hooks/useWallet'
-import { markNotificationsSeen } from '@/lib/notifications/unread'
+import {
+  getNotificationsSeenAt,
+  markNotificationsSeen,
+} from '@/lib/notifications/unread'
 import {
   listReservations,
   type ReservationSummary,
 } from '@/lib/reservations'
+import { cn } from '@/utils/cn'
 import { formatDateLabel, formatTimeLabel } from '@/utils/format'
 
 interface Note {
@@ -20,6 +24,7 @@ interface Note {
   subtitle: string
   tone: 'green' | 'amber' | 'gray'
   time: string
+  unread: boolean
 }
 
 function relativeTime(value: string): string {
@@ -34,8 +39,10 @@ function relativeTime(value: string): string {
   return formatDateLabel(value)
 }
 
-function buildNotes(items: ReservationSummary[]): Note[] {
+function buildNotes(items: ReservationSummary[], seenAt: number): Note[] {
   return items.map(({ reservation, parkingSpace, payment }) => {
+    const created = new Date(reservation.created_at).getTime()
+    const unread = Number.isFinite(created) && created > seenAt
     const confirmed =
       reservation.status === 'reservation_confirmed' ||
       payment?.status === 'payment_confirmed'
@@ -51,6 +58,7 @@ function buildNotes(items: ReservationSummary[]): Note[] {
         }`,
         tone: 'amber' as const,
         time: relativeTime(reservation.created_at),
+        unread,
       }
     }
 
@@ -60,12 +68,13 @@ function buildNotes(items: ReservationSummary[]): Note[] {
       subtitle: `${parkingSpace.title} · ${formatDateLabel(reservation.start_at)} ${formatTimeLabel(reservation.start_at)}`,
       tone: confirmed ? ('green' as const) : ('gray' as const),
       time: relativeTime(reservation.created_at),
+      unread,
     }
   })
 }
 
-const TONE: Record<Note['tone'], { bg: string; icon: typeof Check }> = {
-  green: { bg: 'bg-success-bg text-success', icon: Check },
+const TONE: Record<Note['tone'], { bg: string; icon: typeof CheckCircle2 }> = {
+  green: { bg: 'bg-success-bg text-success', icon: CheckCircle2 },
   amber: { bg: 'bg-warning-bg text-warning', icon: AlertTriangle },
   gray: { bg: 'bg-surface text-ink-muted', icon: Clock },
 }
@@ -85,7 +94,8 @@ export function NotificationsScreen() {
     setLoading(true)
     setError(null)
     try {
-      setNotes(buildNotes(await listReservations(wallet.address)))
+      const seenAt = getNotificationsSeenAt()
+      setNotes(buildNotes(await listReservations(wallet.address), seenAt))
       markNotificationsSeen()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load.')
@@ -112,33 +122,40 @@ export function NotificationsScreen() {
           }
         />
       ) : loading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
+        <div
+          className="space-y-4 overflow-hidden rounded-2xl border border-line bg-surface-raised p-4"
+          aria-busy="true"
+        >
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="flex items-center gap-2.5">
+              <Skeleton className="size-9 shrink-0 rounded-xl" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-3.5 w-1/2 rounded-full" />
+                <Skeleton className="h-3 w-3/4 rounded-full" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : error ? (
         <EmptyState
+          tone="danger"
           title="Couldn't load notifications"
           description={error}
           action={
-            <Button variant="secondary" size="md" onClick={() => void load()}>
+            <Button full size="md" onClick={() => void load()}>
+              <RefreshCw className="mr-2 size-4" />
               Retry
             </Button>
           }
         />
       ) : notes.length === 0 ? (
         <EmptyState
-          icon={<Bell className="size-5" />}
-          title="No notifications"
-          description="Booking updates will appear here."
-          action={
-            <Button size="md" onClick={() => navigate('/')}>
-              Find parking
-            </Button>
-          }
+          icon={<Bell className="size-6" />}
+          title="No notifications yet"
+          description="You'll be notified about booking updates and reminders."
         />
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface-raised">
           {notes.map((note) => {
             const tone = TONE[note.tone]
             const Icon = tone.icon
@@ -147,24 +164,38 @@ export function NotificationsScreen() {
                 key={note.id}
                 type="button"
                 onClick={() => navigate(`/pass/${note.id}`)}
-                className="flex w-full items-center gap-2.5 rounded-2xl bg-surface-raised px-3 py-3 text-left"
+                className="flex w-full items-center gap-2.5 px-4 py-3.5 text-left transition active:bg-surface"
               >
                 <span
-                  className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${tone.bg}`}
+                  className="flex size-2 shrink-0 items-center justify-center"
+                  aria-hidden="true"
                 >
-                  <Icon className="size-4" />
+                  {note.unread ? (
+                    <span className="size-2 rounded-full bg-brand" />
+                  ) : null}
+                </span>
+                <span
+                  className={cn(
+                    'flex size-9 shrink-0 items-center justify-center rounded-xl',
+                    tone.bg,
+                  )}
+                >
+                  <Icon className="size-[18px]" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] font-semibold">
+                  <span className="block text-[15px] font-bold leading-[19px] tracking-[-0.2px]">
                     {note.title}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-ink-muted">
+                  <span className="mt-0.5 block text-[13px] leading-[18px] text-ink-muted">
                     {note.subtitle}
                   </span>
+                  <span className="mt-0.5 block text-[12px] text-ink-faint">
+                    {note.time}
+                  </span>
                 </span>
-                <span className="shrink-0 text-[11px] font-medium text-ink-faint">
-                  {note.time}
-                </span>
+                {note.unread ? (
+                  <span className="sr-only">Unread</span>
+                ) : null}
               </button>
             )
           })}

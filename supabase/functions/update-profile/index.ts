@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 import { readToken, verifyToken } from '../_shared/auth.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
+import { normalizePhone } from '../_shared/phone.ts'
 
 interface Body {
   evm_address?: string
@@ -9,6 +10,8 @@ interface Body {
   display_name?: string | null
   bio?: string | null
   avatar_url?: string | null
+  phone?: string | null
+  phone_shared?: boolean
 }
 
 const MAX_NAME = 60
@@ -53,6 +56,29 @@ Deno.serve(async (request) => {
       update.bio = bio || null
     }
 
+    if (body.phone !== undefined) {
+      const raw = (body.phone ?? '').trim()
+      if (!raw) {
+        update.phone = null
+        // A cleared number cannot be shared. Leaving the flag on would let a
+        // later number become visible without a fresh opt-in.
+        update.phone_shared = false
+      } else {
+        const normalized = normalizePhone(raw)
+        if (!normalized) {
+          return errorResponse(
+            request,
+            'Enter a valid phone number: 8 to 15 digits, optionally starting with +.',
+          )
+        }
+        update.phone = normalized
+      }
+    }
+
+    if (body.phone_shared !== undefined) {
+      update.phone_shared = Boolean(body.phone_shared)
+    }
+
     if (body.avatar_url !== undefined) {
       const avatar = (body.avatar_url ?? '').trim()
       if (avatar) {
@@ -93,7 +119,9 @@ Deno.serve(async (request) => {
 
     const { data } = await supabase
       .from('profiles')
-      .select('display_name, bio, avatar_url, nmiq_address, evm_address')
+      .select(
+        'display_name, bio, avatar_url, nmiq_address, evm_address, phone, phone_shared',
+      )
       .ilike('evm_address', ownerAddress)
       .maybeSingle()
 
@@ -104,6 +132,8 @@ Deno.serve(async (request) => {
         avatar_url: data?.avatar_url ?? null,
         nmiq_address: data?.nmiq_address ?? null,
         evm_address: data?.evm_address ?? ownerAddress,
+        phone: data?.phone ?? null,
+        phone_shared: Boolean(data?.phone_shared),
       },
     })
   } catch (error) {

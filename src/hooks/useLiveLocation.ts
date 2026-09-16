@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import {
+  bearingBetween,
+  distanceMeters,
+  smoothHeading,
+} from '@/lib/maps/camera'
 import type { LatLng } from '@/utils/geo'
 
 export type LocationStatus =
@@ -30,6 +35,13 @@ export interface LiveLocationResult {
 
 /** Ignore bursts of fixes closer together than this. */
 const MIN_INTERVAL_MS = 900
+
+/**
+ * How far the device must travel between fixes before the direction of travel
+ * is trusted as a heading. Below this, GPS noise dominates and the bearing
+ * would swing wildly.
+ */
+const MIN_MOVE_METERS = 5
 
 function messageFor(status: LocationStatus): string | null {
   switch (status) {
@@ -75,6 +87,10 @@ export function useLiveLocation(): LiveLocationResult {
 
   const watchId = useRef<number | null>(null)
   const lastAccepted = useRef(0)
+  /** Smoothed heading, so state updates always build on the filtered value. */
+  const headingRef = useRef<number | null>(null)
+  /** Previous fix, used to derive a heading when the device reports none. */
+  const lastPosition = useRef<LatLng | null>(null)
 
   const supported =
     typeof navigator !== 'undefined' && 'geolocation' in navigator
@@ -110,12 +126,32 @@ export function useLiveLocation(): LiveLocationResult {
         lastAccepted.current = now
 
         const { coords } = update
-        setPosition({ lat: coords.latitude, lng: coords.longitude })
-        setHeading(
+        const next = { lat: coords.latitude, lng: coords.longitude }
+        const previous = lastPosition.current
+        setPosition(next)
+
+        // Prefer the device's own heading. Many platforms leave it null even
+        // while moving, so fall back to the direction of travel — but only once
+        // the device has moved far enough for the bearing to mean anything.
+        const reported =
           typeof coords.heading === 'number' && !Number.isNaN(coords.heading)
             ? coords.heading
-            : null,
-        )
+            : null
+        const derived =
+          reported === null &&
+          previous !== null &&
+          distanceMeters(previous, next) >= MIN_MOVE_METERS
+            ? bearingBetween(previous, next)
+            : null
+        lastPosition.current = next
+
+        const raw = reported ?? derived
+        if (raw !== null) {
+          // Raw headings jitter by several degrees; feeding that straight to
+          // the camera makes the map twitch.
+          headingRef.current = smoothHeading(headingRef.current, raw)
+          setHeading(headingRef.current)
+        }
         setSpeedMps(
           typeof coords.speed === 'number' && !Number.isNaN(coords.speed)
             ? coords.speed

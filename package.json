@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "check:secrets": "node scripts/check-secrets.ts",
+    "payout:send": "node --env-file-if-exists=.env scripts/send-payout.ts",
+    "verify": "npm run check:secrets && npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "@nimiq/mini-app-sdk": "^0.1.0",

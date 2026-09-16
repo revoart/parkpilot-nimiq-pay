@@ -1,4 +1,4 @@
-import { ImagePlus } from 'lucide-react'
+import { Accessibility, ImagePlus, ShieldCheck, Zap } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -8,7 +8,6 @@ import { LocationMap } from '@/components/map/LocationMap'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import { Toggle } from '@/components/ui/Toggle'
 import { useAddressSuggestions } from '@/hooks/useAddressSuggestions'
 import { useWallet } from '@/hooks/useWallet'
 import {
@@ -28,15 +27,9 @@ import { hapticConfirm } from '@/utils/haptics'
 const TOTAL = 7
 const PHOTO_STEP = 6
 const REVIEW_STEP = 7
-const TITLES = [
-  'Where is your space?',
-  'What type of space?',
-  'Set your price',
-  'Listing details',
-  'When can drivers book?',
-  'Parking photo',
-  'Review listing',
-]
+
+const FIELD_LABEL =
+  'text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint'
 
 const TYPES = [
   { value: 'garage', label: 'Garage' },
@@ -199,52 +192,36 @@ export function HostAddScreen() {
   }
 
   return (
-    <HostShell showBack showNav={false} title={TITLES[step - 1]}>
-      <div className="space-y-3.5">
-        {/* Progress */}
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 gap-1">
-            {Array.from({ length: TOTAL }).map((_, index) => (
-              <div
-                key={index}
-                className={cn(
-                  'h-1 flex-1 rounded-full transition-all',
-                  index < step ? 'bg-ink' : 'bg-line',
-                )}
-              />
-            ))}
-          </div>
-          <span className="text-xs font-semibold text-ink-faint">
-            {step}/{TOTAL}
-          </span>
-        </div>
-
+    <HostShell
+      showBack
+      showNav={false}
+      title="Add Parking Space"
+      headerRight={
+        <span className="rounded-full bg-brand/12 px-3 py-1 text-[13px] font-bold text-brand">
+          {step} of {TOTAL}
+        </span>
+      }
+    >
+      <div className="space-y-4">
         {step === 1 ? (
           <div className="space-y-3">
-            {coordsValid ? (
-              <LocationMap
-                point={{ lat, lng }}
-                className="h-40 w-full overflow-hidden rounded-2xl border border-line"
+            <div className="space-y-1.5">
+              <label htmlFor="add-address" className={FIELD_LABEL}>
+                Street Address
+              </label>
+              <input
+                id="add-address"
+                value={address}
+                onChange={(event) => {
+                  setAddress(event.target.value)
+                  setSuppressSuggestions(false)
+                }}
+                placeholder="e.g. 42 Maple Ave, Toronto"
+                className="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3.5 text-[15px] outline-none placeholder:text-ink-faint"
               />
-            ) : (
-              <div className="flex h-40 w-full items-center justify-center rounded-2xl border border-dashed border-line-strong bg-surface-raised px-6 text-center">
-                <p className="text-xs font-medium text-ink-muted">
-                  Pick an address below to place your space on the map.
-                </p>
-              </div>
-            )}
-            <input
-              value={address}
-              onChange={(event) => {
-                setAddress(event.target.value)
-                setSuppressSuggestions(false)
-              }}
-              placeholder="Search an address (e.g. 42 Maple Ave, Toronto)"
-              aria-label="Search an address"
-              className="w-full rounded-xl bg-surface px-4 py-3.5 text-[15px] outline-none placeholder:text-ink-faint"
-            />
+            </div>
             {!suppressSuggestions && suggestions.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl bg-surface-raised">
+              <div className="overflow-hidden rounded-2xl border border-line bg-surface-raised">
                 {suggestions.map((suggestion) => (
                   <button
                     key={suggestion.id}
@@ -255,7 +232,7 @@ export function HostAddScreen() {
                       setLongitude(String(suggestion.lng))
                       setSuppressSuggestions(true)
                     }}
-                    className="block w-full px-4 py-3 text-left active:opacity-70"
+                    className="block w-full border-b border-line px-4 py-3 text-left last:border-b-0 active:bg-surface"
                   >
                     <span className="block truncate text-[14px] font-semibold">
                       {suggestion.name}
@@ -267,103 +244,158 @@ export function HostAddScreen() {
                 ))}
               </div>
             ) : null}
+            {coordsValid ? (
+              <LocationMap
+                point={{ lat, lng }}
+                className="h-40 w-full overflow-hidden rounded-2xl border border-line"
+              />
+            ) : (
+              <div className="flex h-40 w-full items-center justify-center rounded-2xl border border-dashed border-line-strong bg-surface-raised px-6 text-center">
+                <p className="text-xs font-medium text-ink-muted">
+                  Pick an address above to place your space on the map.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
-              <input
-                value={latitude}
-                onChange={(event) => setLatitude(event.target.value)}
-                placeholder="Latitude"
-                inputMode="decimal"
-                aria-label="Latitude"
-                className="w-full rounded-xl bg-surface px-4 py-3 text-sm outline-none placeholder:text-ink-faint"
-              />
-              <input
-                value={longitude}
-                onChange={(event) => setLongitude(event.target.value)}
-                placeholder="Longitude"
-                inputMode="decimal"
-                aria-label="Longitude"
-                className="w-full rounded-xl bg-surface px-4 py-3 text-sm outline-none placeholder:text-ink-faint"
-              />
+              <div className="space-y-1.5">
+                <label htmlFor="add-lat" className={FIELD_LABEL}>
+                  Latitude
+                </label>
+                <input
+                  id="add-lat"
+                  value={latitude}
+                  onChange={(event) => setLatitude(event.target.value)}
+                  placeholder="43.6532"
+                  inputMode="decimal"
+                  className="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 text-sm outline-none placeholder:text-ink-faint"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="add-lng" className={FIELD_LABEL}>
+                  Longitude
+                </label>
+                <input
+                  id="add-lng"
+                  value={longitude}
+                  onChange={(event) => setLongitude(event.target.value)}
+                  placeholder="-79.3832"
+                  inputMode="decimal"
+                  className="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3 text-sm outline-none placeholder:text-ink-faint"
+                />
+              </div>
             </div>
           </div>
         ) : null}
 
         {step === 2 ? (
-          <div className="grid grid-cols-2 gap-2">
-            {TYPES.map((type) => (
-              <button
-                key={type.value}
-                type="button"
-                onClick={() => setParkingType(type.value)}
-                className={cn(
-                  'rounded-2xl border py-4 text-[15px] font-semibold transition',
-                  parkingType === type.value
-                    ? 'border-ink bg-ink text-on-ink'
-                    : 'border-line bg-surface-raised text-ink',
-                )}
-              >
-                {type.label}
-              </button>
-            ))}
+          <div className="space-y-1.5">
+            <p className={FIELD_LABEL}>Space Type</p>
+            <div className="grid grid-cols-2 gap-2">
+              {TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => setParkingType(type.value)}
+                  className={cn(
+                    'rounded-2xl border py-4 text-[15px] font-bold transition',
+                    parkingType === type.value
+                      ? 'border-brand-fill bg-brand-fill text-brand-fg shadow-[0_4px_12px_rgba(76,130,255,0.12)]'
+                      : 'border-line bg-surface-raised text-ink',
+                  )}
+                >
+                  {type.label}
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
 
         {step === 3 ? (
-          <div className="flex items-center gap-3 rounded-2xl bg-surface-raised px-4 py-3">
-            <span className="flex-1 text-[15px] font-semibold">
-              Hourly rate
-            </span>
-            <span className="text-ink-muted">USDT</span>
-            <input
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-              placeholder="5.00"
-              inputMode="decimal"
-              aria-label="Hourly rate in USDT"
-              className="w-24 rounded-xl border border-line bg-surface px-3 py-2 text-right text-[15px] font-bold outline-none"
-            />
+          <div className="space-y-1.5">
+            <label htmlFor="add-price" className={FIELD_LABEL}>
+              Hourly Rate (USDT)
+            </label>
+            <div className="flex items-center gap-2 rounded-2xl border border-line bg-surface-raised px-4">
+              <input
+                id="add-price"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                placeholder="1.50"
+                inputMode="decimal"
+                className="min-w-0 flex-1 bg-transparent py-3.5 text-[22px] font-extrabold text-brand outline-none placeholder:text-ink-faint"
+              />
+              <span className="text-[13px] font-bold text-ink-muted">
+                USDT
+              </span>
+            </div>
           </div>
         ) : null}
 
         {step === 4 ? (
-          <div className="space-y-3">
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Listing name (e.g. Private Driveway)"
-              aria-label="Listing name"
-              className="w-full rounded-xl bg-surface px-4 py-3.5 text-[15px] outline-none placeholder:text-ink-faint"
-            />
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Describe your space (optional)"
-              aria-label="Description"
-              rows={3}
-              className="w-full resize-none rounded-xl bg-surface px-4 py-3 text-sm outline-none placeholder:text-ink-faint"
-            />
-            <div className="overflow-hidden rounded-2xl bg-surface-raised">
-              {(
-                [
-                  ['Covered', covered, setCovered],
-                  ['EV charging', evCharging, setEvCharging],
-                  ['Accessible', accessible, setAccessible],
-                ] as [string, boolean, (value: boolean) => void][]
-              ).map(([label, value, setter], index, arr) => (
-                <div key={label}>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-[15px] font-medium">{label}</span>
-                    <Toggle
-                      on={value}
-                      ariaLabel={label}
-                      onChange={() => setter(!value)}
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="add-title" className={FIELD_LABEL}>
+                Listing Title
+              </label>
+              <input
+                id="add-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="e.g. Private Driveway"
+                className="w-full rounded-2xl border border-line bg-surface-raised px-4 py-3.5 text-[15px] outline-none placeholder:text-ink-faint"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="add-description" className={FIELD_LABEL}>
+                Description &amp; Instructions
+              </label>
+              <textarea
+                id="add-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Describe your space"
+                rows={4}
+                className="w-full resize-none rounded-2xl border border-line bg-surface-raised px-4 py-3.5 text-[15px] leading-[22px] outline-none placeholder:text-ink-faint"
+              />
+            </div>
+            <div className="space-y-2">
+              <p className={FIELD_LABEL}>Select Amenities</p>
+              <div className="grid grid-cols-2 gap-3">
+                {(
+                  [
+                    ['Covered', ShieldCheck, covered, setCovered],
+                    ['EV Charging', Zap, evCharging, setEvCharging],
+                    ['Accessible', Accessibility, accessible, setAccessible],
+                  ] as [
+                    string,
+                    typeof ShieldCheck,
+                    boolean,
+                    (value: boolean) => void,
+                  ][]
+                ).map(([label, Icon, value, setter]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={value}
+                    onClick={() => setter(!value)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-full border px-3.5 py-2.5 text-[14px] font-semibold transition',
+                      value
+                        ? 'border-brand-fill bg-brand-fill text-brand-fg'
+                        : 'border-line bg-surface-raised text-ink',
+                    )}
+                  >
+                    <Icon
+                      aria-hidden="true"
+                      className={cn(
+                        'size-4 shrink-0',
+                        value ? 'text-brand-fg' : 'text-brand',
+                      )}
                     />
-                  </div>
-                  {index < arr.length - 1 ? (
-                    <div className="mx-4 h-px bg-line" />
-                  ) : null}
-                </div>
-              ))}
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}
@@ -393,7 +425,7 @@ export function HostAddScreen() {
 
             {photoPreview || photoUrl ? (
               <div className="space-y-3">
-                <div className="relative overflow-hidden rounded-2xl">
+                <div className="relative overflow-hidden rounded-2xl border border-line">
                   <img
                     src={photoUrl ?? photoPreview ?? ''}
                     alt="Parking space preview"
@@ -412,7 +444,7 @@ export function HostAddScreen() {
                   <button
                     type="button"
                     onClick={() => fileInput.current?.click()}
-                    className="rounded-xl border border-line-strong px-3.5 py-2 text-[13px] font-semibold"
+                    className="rounded-xl border border-line-strong px-3.5 py-2 text-[13px] font-semibold text-ink"
                   >
                     Replace Photo
                   </button>
@@ -453,37 +485,47 @@ export function HostAddScreen() {
             <ListingPhoto
               imageUrl={photoUrl}
               title={title || 'Parking space'}
-              className="h-32 w-full rounded-2xl"
+              className="h-36 w-full rounded-2xl"
             />
-            <div className="space-y-3 rounded-2xl bg-surface-raised p-4">
-            {[
-              { label: 'Name', value: title || '—' },
-              { label: 'Address', value: address || '—' },
-              {
-                label: 'Type',
-                value: TYPES.find((type) => type.value === parkingType)?.label ?? '—',
-              },
-              { label: 'Hourly rate', value: `${price || '0'} USDT` },
-              { label: 'Hours', value: hoursSummary },
-              {
-                label: 'Amenities',
-                value:
-                  [
-                    covered ? 'Covered' : null,
-                    evCharging ? 'EV' : null,
-                    accessible ? 'Accessible' : null,
-                  ]
-                    .filter(Boolean)
-                    .join(', ') || 'None',
-              },
-            ].map((row) => (
-              <div key={row.label} className="flex justify-between gap-4">
-                <span className="text-[14px] text-ink-muted">{row.label}</span>
-                <span className="text-right text-[14px] font-semibold">
-                  {row.value}
-                </span>
-              </div>
-            ))}
+            <div className="overflow-hidden rounded-2xl border border-line bg-surface-raised">
+              {[
+                { label: 'Name', value: title || '—' },
+                { label: 'Address', value: address || '—' },
+                {
+                  label: 'Type',
+                  value:
+                    TYPES.find((type) => type.value === parkingType)?.label ??
+                    '—',
+                },
+                { label: 'Hourly rate', value: `${price || '0'} USDT` },
+                { label: 'Hours', value: hoursSummary },
+                {
+                  label: 'Amenities',
+                  value:
+                    [
+                      covered ? 'Covered' : null,
+                      evCharging ? 'EV' : null,
+                      accessible ? 'Accessible' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(', ') || 'None',
+                },
+              ].map((row, index, rows) => (
+                <div
+                  key={row.label}
+                  className={cn(
+                    'flex justify-between gap-4 px-4 py-3',
+                    index < rows.length - 1 && 'border-b border-line',
+                  )}
+                >
+                  <span className="text-[13px] text-ink-muted">
+                    {row.label}
+                  </span>
+                  <span className="text-right text-[13px] font-semibold">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
@@ -497,7 +539,7 @@ export function HostAddScreen() {
           loading={submitting}
           disabled={step === PHOTO_STEP && !photoUrl}
         >
-          {step < TOTAL ? 'Continue' : 'Publish parking space'}
+          {step < TOTAL ? 'Next Step' : 'Publish parking space'}
         </Button>
       </div>
     </HostShell>

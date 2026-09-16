@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MAP_ID_OVERRIDE_KEY, hasMapId, resolveMapId } from './loader'
 
@@ -6,6 +6,10 @@ import { MAP_ID_OVERRIDE_KEY, hasMapId, resolveMapId } from './loader'
  * The Map ID can come from a build-time env var or a runtime override. The
  * override has to win, because that is what lets rotation be switched on (or
  * rolled back) without a rebuild.
+ *
+ * The env var is stubbed per test rather than relying on whatever the local
+ * `.env` happens to hold, so these cases describe the logic rather than the
+ * developer's machine.
  */
 function stubBrowser(options: {
   windowValue?: string
@@ -28,18 +32,37 @@ function clearBrowser(): void {
   delete (globalThis as unknown as { window?: unknown }).window
 }
 
-afterEach(clearBrowser)
+beforeEach(() => {
+  vi.stubEnv('VITE_GOOGLE_MAPS_MAP_ID', '')
+})
+
+afterEach(() => {
+  clearBrowser()
+  vi.unstubAllEnvs()
+})
 
 describe('resolveMapId', () => {
   it('returns null without a browser', () => {
     clearBrowser()
-    // No env var is set in the test environment, so there is nothing to use.
     expect(resolveMapId()).toBeNull()
     expect(hasMapId()).toBe(false)
   })
 
-  it('returns null when the browser has no override', () => {
+  it('returns null when neither the env nor the browser supplies one', () => {
     stubBrowser({})
+    expect(resolveMapId()).toBeNull()
+  })
+
+  it('falls back to the build-time env var', () => {
+    stubBrowser({})
+    vi.stubEnv('VITE_GOOGLE_MAPS_MAP_ID', 'map-from-env')
+    expect(resolveMapId()).toBe('map-from-env')
+    expect(hasMapId()).toBe(true)
+  })
+
+  it('ignores a blank env var', () => {
+    stubBrowser({})
+    vi.stubEnv('VITE_GOOGLE_MAPS_MAP_ID', '   ')
     expect(resolveMapId()).toBeNull()
   })
 
@@ -52,6 +75,13 @@ describe('resolveMapId', () => {
   it('prefers the window override over localStorage', () => {
     stubBrowser({ windowValue: 'map-from-window', storageValue: 'map-from-storage' })
     expect(resolveMapId()).toBe('map-from-window')
+  })
+
+  it('prefers an override over the env var', () => {
+    // This is what makes rotation rollable-back without a rebuild.
+    stubBrowser({ storageValue: 'map-from-storage' })
+    vi.stubEnv('VITE_GOOGLE_MAPS_MAP_ID', 'map-from-env')
+    expect(resolveMapId()).toBe('map-from-storage')
   })
 
   it('ignores blank overrides', () => {

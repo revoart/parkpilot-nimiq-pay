@@ -4,8 +4,16 @@ import { LocateFixed } from 'lucide-react'
 
 import { useTheme } from '@/hooks/useTheme'
 import {
+  easeAngleToward,
+  easeToward,
+  metersPerPixel,
+  normalizeAngle,
+  offsetAlongHeading,
+} from '@/lib/maps/camera'
+import {
   destinationIcon,
   dotIcon,
+  fixedArrowIcon,
   headingIcon,
   isMapsConfigured,
   loadMaps,
@@ -28,13 +36,19 @@ export interface MapPoint {
 }
 
 /**
- * Ceiling on how many times we will re-apply a heading before giving up.
+ * Time constants for the follow camera, in milliseconds.
  *
- * Google resets the heading during initialisation, so we correct it — but a
- * hard cap means a map that simply cannot rotate (a raster renderer behind a
- * vector Map ID) can never turn the correction into a feedback loop.
+ * GPS fixes land about once a second while the screen redraws at 60fps, so
+ * each fix is treated as a target rather than an instruction. The frame loop
+ * eases toward it, which keeps motion continuous instead of jumping once a
+ * second. Lower is snappier, higher is smoother.
  */
-const MAX_HEADING_ATTEMPTS = 20
+const CENTER_TAU_MS = 420
+const HEADING_TAU_MS = 380
+const ZOOM_TAU_MS = 500
+
+/** Ignore a frame gap longer than this (a backgrounded tab) when easing. */
+const MAX_FRAME_MS = 100
 
 interface GoogleMapProps {
   points: MapPoint[]
@@ -56,7 +70,7 @@ interface GoogleMapProps {
   routeColor?: string
   /** Dash the active route (used for the walking leg). */
   routeDashed?: boolean
-  /** Device heading in degrees — rotates the position arrow. */
+  /** Device heading in degrees — rotates the camera and, on raster, the arrow. */
   heading?: number | null
   /** Keep the camera locked on the driver. */
   follow?: boolean
@@ -75,8 +89,8 @@ interface GoogleMapProps {
   onDragStart?: () => void
   /**
    * Pixels of the map's bottom that are covered by app UI (e.g. the listings
-   * panel). Used to pad `fitBounds` and to offset `panTo` so targets and pins
-   * never land behind it.
+   * panel). Used to pad `fitBounds` and to keep the followed position marker
+   * clear of the panel.
    */
   bottomInset?: number
   interactive?: boolean
@@ -90,8 +104,12 @@ function iconFor(point: MapPoint, active: boolean) {
 }
 
 /**
- * Google Maps JavaScript API map. Uses the legacy `google.maps.Marker`, which
- * needs no Map ID and cannot hit the `AdvancedMarkerElement` failure mode.
+ * Google Maps JavaScript API map.
+ *
+ * The camera is driven from a frame loop rather than directly from each GPS
+ * fix, because fixes arrive about once a second and applying them straight to
+ * the map produces a visible jump per fix. On a vector map the loop also
+ * carries the heading, so the map rotates to the direction of travel.
  */
 export function GoogleMap({
   points,
@@ -120,28 +138,48 @@ export function GoogleMap({
   const container = useRef<HTMLDivElement | null>(null)
   const map = useRef<google.maps.Map | null>(null)
   const markers = useRef(new Map<string, google.maps.Marker>())
+  /** Last icon applied to each marker, so we only call `setIcon` on a change. */
+  const markerIcons = useRef(new Map<string, unknown>())
   const meMarker = useRef<google.maps.Marker | null>(null)
+  const meIcon = useRef<unknown>(null)
   const destinationMarker = useRef<google.maps.Marker | null>(null)
   const walkLine = useRef<google.maps.Polyline | null>(null)
   const routeLine = useRef<google.maps.Polyline | null>(null)
   /** True when the map is rendering vector tiles (a Map ID was accepted). */
   const vectorRef = useRef(false)
-  /**
-   * The heading the camera should hold. Kept in a ref so the `idle` handler
-   * can re-assert it after Google internally resets it.
-   */
-  const desiredHeading = useRef<number | null>(null)
-  /**
-   * How many times we have re-asserted the current heading. Google discards a
-   * heading set while the map is still initialising, so we re-apply once the
-   * camera settles — but a hard cap stops any chance of a feedback loop.
-   */
-  const headingAttempts = useRef(0)
   const onCenterChangeRef = useRef(onCenterChange)
   const onDragStartRef = useRef(onDragStart)
   const bottomInsetRef = useRef(bottomInset)
   /** Timestamp of the last camera move we caused, so we can ignore its idle. */
   const lastProgrammaticMove = useRef(0)
+  const onSelectRef = useRef(onSelect)
+  const themeRef = useRef(theme)
+  const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState(() => !isMapsConfigured())
+
+  /** Target camera, set from the latest GPS fix. */
+  const targetCenter = useRef<LatLng | null>(null)
+  const targetHeading = useRef<number | null>(null)
+  const targetZoom = useRef<number | null>(null)
+  /** Eased camera actually applied each frame. */
+  const camCenter = useRef<LatLng | null>(null)
+  const camHeading = useRef<number | null>(null)
+  const camZoom = useRef<number | null>(null)
+  /** Reseed the eased camera the next time following starts. */
+  const followSeeded = useRef(false)
+  /** Polls until the renderer reports VECTOR or RASTER. */
+  const renderTypeTimer = useRef<number | null>(null)
+  /**
+   * Set only while we are inside our own `moveCamera` call.
+   *
+   * `moveCamera` fires `heading_changed` synchronously, so a heading change
+   * arriving while this is false came from a gesture rather than from us —
+   * which is how a two-finger rotate is told apart from the follow camera
+   * doing its job.
+   */
+  const writingCamera = useRef(false)
+  /** True while the follow loop is driving the camera. */
+  const cameraActive = useRef(false)
 
   useEffect(() => {
     onCenterChangeRef.current = onCenterChange
@@ -154,10 +192,6 @@ export function GoogleMap({
   useEffect(() => {
     bottomInsetRef.current = bottomInset
   }, [bottomInset])
-  const onSelectRef = useRef(onSelect)
-  const themeRef = useRef(theme)
-  const [ready, setReady] = useState(false)
-  const [failed, setFailed] = useState(() => !isMapsConfigured())
 
   useEffect(() => {
     onSelectRef.current = onSelect
@@ -174,6 +208,7 @@ export function GoogleMap({
     }
 
     const markerMap = markers.current
+    const markerIconMap = markerIcons.current
     let cancelled = false
     const unsubscribe = onMapsAuthFailure(() => {
       if (!cancelled) setFailed(true)
@@ -212,20 +247,53 @@ export function GoogleMap({
           vectorRef.current = false
         }
 
-        if (mapId && instance) vectorRef.current = true
-
         map.current = instance
 
         // Optional debug handle (VITE_DEBUG_MAP=true) so camera state can be
         // asserted from automated checks instead of guessed from pixels.
         exposeMapDebug('__PARKPILOT_MAP__', instance)
 
-        // ParkPilot drives the camera; the driver pans. Rotating by accident
-        // mid-navigation would be disorienting, so the gesture is disabled.
-        // The tilt is deliberately left alone: changing it makes Google reset
-        // the heading to north.
-        if (vectorRef.current) {
-          instance.setHeadingInteractionEnabled(false)
+        /**
+         * Decide whether rotation is actually available.
+         *
+         * This deliberately reads the map's *real* rendering type rather than
+         * trusting that a Map ID was supplied: a raster Map ID, a Map ID from
+         * another project, or a browser without WebGL all leave the map on the
+         * raster renderer, where `setHeading` is silently ignored. Assuming
+         * vector from the mere presence of a Map ID would make the app claim a
+         * rotation it cannot perform.
+         */
+        const settleRenderingType = (): boolean => {
+          const type = instance.getRenderingType()
+          if (type !== 'VECTOR' && type !== 'RASTER') return false
+          vectorRef.current = type === 'VECTOR'
+          exposeMapDebug('__PARKPILOT_RENDERING__', {
+            type,
+            mapId: mapId ?? null,
+          })
+          if (vectorRef.current) {
+            // Two-finger rotate is allowed. While following, the camera owns
+            // the heading — but a rotation the driver performs themselves is
+            // treated as taking manual control, which stops the follow camera
+            // from fighting the gesture. Tilt stays disabled entirely.
+            instance.setHeadingInteractionEnabled(true)
+            instance.setTiltInteractionEnabled(false)
+          }
+          return true
+        }
+
+        if (!settleRenderingType()) {
+          // The renderer reports UNINITIALIZED until its WebGL context is up.
+          let attempts = 0
+          renderTypeTimer.current = window.setInterval(() => {
+            attempts += 1
+            if (settleRenderingType() || attempts > 40) {
+              if (renderTypeTimer.current !== null) {
+                window.clearInterval(renderTypeTimer.current)
+                renderTypeTimer.current = null
+              }
+            }
+          }, 250)
         }
 
         instance.addListener('idle', () => {
@@ -244,23 +312,15 @@ export function GoogleMap({
           onDragStartRef.current?.()
         })
 
-        // Google zeroes the heading while the vector renderer initialises, and
-        // again whenever the tilt settles. Reacting to the map's own
-        // `heading_changed` event corrects that immediately, rather than
-        // waiting for a timer that a background tab would throttle.
+        // A two-finger rotate is the driver taking manual control, so the
+        // follow camera must let go rather than snap the heading back. Only
+        // meaningful while the camera is actually being driven: outside that,
+        // gesture rotations are already left alone.
         instance.addListener('heading_changed', () => {
-          const want = desiredHeading.current
-          if (want === null || !vectorRef.current) return
-          // Only skip a map we know is raster. Google reports UNINITIALIZED
-          // while the vector renderer is still coming up, and in that window
-          // the map is already rotating — gating on VECTOR here made the
-          // correction dead code.
-          if (instance.getRenderingType() === 'RASTER') return
-          if (Math.abs((instance.getHeading() ?? 0) - want) <= 0.5) return
-          if (headingAttempts.current >= MAX_HEADING_ATTEMPTS) return
-          headingAttempts.current += 1
-          instance.setHeading(want)
+          if (writingCamera.current || !cameraActive.current) return
+          onDragStartRef.current?.()
         })
+
         setReady(true)
       })
       .catch(() => {
@@ -270,13 +330,24 @@ export function GoogleMap({
     return () => {
       cancelled = true
       unsubscribe()
+      if (renderTypeTimer.current !== null) {
+        window.clearInterval(renderTypeTimer.current)
+        renderTypeTimer.current = null
+      }
       markerMap.forEach((marker) => marker.setMap(null))
       markerMap.clear()
+      markerIconMap.clear()
       meMarker.current = null
+      meIcon.current = null
       destinationMarker.current = null
       walkLine.current = null
       routeLine.current = null
       vectorRef.current = false
+      followSeeded.current = false
+      targetCenter.current = null
+      camCenter.current = null
+      camHeading.current = null
+      camZoom.current = null
       map.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -292,7 +363,18 @@ export function GoogleMap({
     )
   }, [ready, theme])
 
-  // Keep markers in sync on every render.
+  const pointKey = points
+    .map((p) => `${p.id}:${p.lat.toFixed(5)},${p.lng.toFixed(5)}`)
+    .join('|')
+  const centerKey = center ? `${center.lat.toFixed(5)},${center.lng.toFixed(5)}` : ''
+  const destinationKey = destination
+    ? `${destination.lat.toFixed(5)},${destination.lng.toFixed(5)}`
+    : ''
+
+  // Keep markers in sync. Keyed on the point geometry rather than running on
+  // every render, and `setIcon` is skipped unless the icon actually changed —
+  // rebuilding an icon allocates a fresh SVG data URL that the browser must
+  // then decode, which is what made the map stutter while moving.
   useEffect(() => {
     const instance = map.current
     if (!ready || !instance) return
@@ -311,7 +393,12 @@ export function GoogleMap({
         markers.current.set(point.id, marker)
       }
       marker.setPosition({ lat: point.lat, lng: point.lng })
-      marker.setIcon(iconFor(point, active))
+
+      const icon = iconFor(point, active)
+      if (markerIcons.current.get(point.id) !== icon) {
+        marker.setIcon(icon)
+        markerIcons.current.set(point.id, icon)
+      }
       marker.setZIndex(active ? 999 : 1)
     }
 
@@ -319,19 +406,17 @@ export function GoogleMap({
       if (!seen.has(id)) {
         marker.setMap(null)
         markers.current.delete(id)
+        markerIcons.current.delete(id)
       }
     }
-  })
+  }, [ready, pointKey, selectedId, points])
 
-  const pointKey = points.map((p) => `${p.id}:${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|')
-  const centerKey = center ? `${center.lat.toFixed(5)},${center.lng.toFixed(5)}` : ''
-  const destinationKey = destination
-    ? `${destination.lat.toFixed(5)},${destination.lng.toFixed(5)}`
-    : ''
-
+  // Frame the map when it is not following the driver. Skipped entirely while
+  // following, because `fitBounds` resets the heading to zero — which would
+  // silently undo the rotation on every re-frame.
   useEffect(() => {
     const instance = map.current
-    if (!ready || !instance) return
+    if (!ready || !instance || follow) return
 
     const inset = bottomInsetRef.current
     const padding = { top: 80, right: 16, bottom: inset + 16, left: 16 }
@@ -341,14 +426,14 @@ export function GoogleMap({
     const padded = (target: LatLng): LatLng => {
       if (inset <= 0) return target
       const projection = instance.getProjection()
-      const zoom = instance.getZoom()
-      if (!projection || zoom === undefined) return target
+      const currentZoom = instance.getZoom()
+      if (!projection || currentZoom === undefined) return target
       const point = projection.fromLatLngToPoint(new google.maps.LatLng(target))
       if (!point) return target
       // World units per pixel at this zoom is 1 / 2^zoom.
       const shifted = new google.maps.Point(
         point.x,
-        point.y + inset / 2 / Math.pow(2, zoom),
+        point.y + inset / 2 / Math.pow(2, currentZoom),
       )
       const next = projection.fromPointToLatLng(shifted)
       return next ? { lat: next.lat(), lng: next.lng() } : target
@@ -393,10 +478,126 @@ export function GoogleMap({
       instance.fitBounds(bounds, padding)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, selectedId, pointKey, centerKey, destinationKey])
+  }, [ready, follow, selectedId, pointKey, centerKey, destinationKey])
 
   const meLat = me?.lat
   const meLng = me?.lng
+
+  // Record the latest fix as the camera target. The frame loop below consumes
+  // it, so this only ever stores values.
+  useEffect(() => {
+    if (!follow || meLat === undefined || meLng === undefined) return
+
+    if (!followSeeded.current) {
+      // Starting (or resuming) following: snap the eased camera to the driver
+      // so the loop does not sweep in from wherever the map was left.
+      followSeeded.current = true
+      camCenter.current = { lat: meLat, lng: meLng }
+      camHeading.current = targetHeading.current
+      camZoom.current = followZoom
+    }
+
+    targetCenter.current = { lat: meLat, lng: meLng }
+    targetZoom.current = followZoom
+    if (heading !== null && Number.isFinite(heading)) {
+      targetHeading.current = normalizeAngle(heading)
+    }
+  }, [follow, meLat, meLng, heading, followZoom])
+
+  useEffect(() => {
+    if (!follow) followSeeded.current = false
+  }, [follow])
+
+  // The follow camera. Runs every frame while following: eases the camera
+  // toward the latest fix and applies centre, heading and zoom in one
+  // `moveCamera` call, so they land in the same frame instead of fighting as
+  // separate animations.
+  useEffect(() => {
+    if (!ready || !follow) return
+
+    let raf = 0
+    let last = 0
+    cameraActive.current = true
+
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick)
+      const instance = map.current
+      const target = targetCenter.current
+      if (!instance || !target) return
+
+      const dt = last ? Math.min(now - last, MAX_FRAME_MS) : 16
+      last = now
+
+      const wantedZoom = targetZoom.current ?? followZoom
+      camZoom.current =
+        camZoom.current === null
+          ? wantedZoom
+          : easeToward(camZoom.current, wantedZoom, dt, ZOOM_TAU_MS)
+
+      if (targetHeading.current !== null) {
+        camHeading.current =
+          camHeading.current === null
+            ? targetHeading.current
+            : easeAngleToward(
+                camHeading.current,
+                targetHeading.current,
+                dt,
+                HEADING_TAU_MS,
+              )
+      }
+
+      const rotation = rotationFor(
+        camHeading.current,
+        vectorRef.current ? resolveMapId() : null,
+      )
+
+      // Keep the driver clear of the panel covering the bottom of the map by
+      // aiming the camera ahead of them along the direction of travel.
+      const aim =
+        rotation !== null
+          ? offsetAlongHeading(
+              target,
+              rotation,
+              metersPerPixel(target.lat, camZoom.current),
+              bottomInsetRef.current / 2,
+            )
+          : target
+
+      const current = camCenter.current ?? target
+      camCenter.current = {
+        lat: easeToward(current.lat, aim.lat, dt, CENTER_TAU_MS),
+        lng: easeToward(current.lng, aim.lng, dt, CENTER_TAU_MS),
+      }
+
+      const camera: google.maps.CameraOptions = {
+        center: camCenter.current,
+        zoom: camZoom.current,
+      }
+      if (rotation !== null) camera.heading = rotation
+
+      lastProgrammaticMove.current = Date.now()
+      writingCamera.current = true
+      instance.moveCamera(camera)
+      writingCamera.current = false
+
+      exposeMapDebug('__PARKPILOT_ROTATION__', {
+        heading,
+        targetHeading: targetHeading.current,
+        easedHeading: camHeading.current,
+        vector: vectorRef.current,
+        mapId: vectorRef.current ? resolveMapId() : null,
+        rotation,
+        renderingType: instance.getRenderingType(),
+      })
+    }
+
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      cameraActive.current = false
+      writingCamera.current = false
+    }
+  }, [ready, follow, followZoom, heading])
 
   useEffect(() => {
     const instance = map.current
@@ -411,9 +612,20 @@ export function GoogleMap({
       })
     }
     meMarker.current.setPosition(position)
-    meMarker.current.setIcon(
-      meVariant === 'arrow' ? headingIcon(heading) : dotIcon('#2563EB'),
-    )
+
+    // On a vector map the camera carries the heading, so the marker is a fixed
+    // arrow — rotating it as well would point it the wrong way. On a raster map
+    // the arrow is the only heading indicator, so it rotates.
+    const nextIcon =
+      meVariant === 'arrow'
+        ? vectorRef.current
+          ? fixedArrowIcon()
+          : headingIcon(heading)
+        : dotIcon('#2563EB')
+    if (meIcon.current !== nextIcon) {
+      meMarker.current.setIcon(nextIcon)
+      meIcon.current = nextIcon
+    }
   }, [ready, meLat, meLng, meVariant, heading])
 
   const destLat = destination?.lat
@@ -518,73 +730,6 @@ export function GoogleMap({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, routeKey, routeColor, routeDashed])
-
-  /** Keep the camera locked on the driver while navigating. */
-  const wasFollowing = useRef(false)
-
-  useEffect(() => {
-    const instance = map.current
-    if (!ready || !instance) return
-
-    if (!follow) {
-      wasFollowing.current = false
-      return
-    }
-    if (meLat === undefined || meLng === undefined) return
-
-    lastProgrammaticMove.current = Date.now()
-    if (!wasFollowing.current) {
-      wasFollowing.current = true
-      instance.setZoom(followZoom)
-    }
-    instance.panTo({ lat: meLat, lng: meLng })
-  }, [ready, follow, meLat, meLng, followZoom])
-
-  // Rotate the camera to the direction of travel. Only meaningful on a vector
-  // map — a raster map silently ignores `setHeading`, so it is gated rather
-  // than faked.
-  useEffect(() => {
-    if (!ready) return
-    const mapId = vectorRef.current ? resolveMapId() : null
-    const rotation = rotationFor(heading, mapId)
-    const instance = map.current
-    if (desiredHeading.current !== rotation) headingAttempts.current = 0
-    desiredHeading.current = rotation
-    if (rotation === null || !instance) return
-    exposeMapDebug('__PARKPILOT_ROTATION__', {
-      heading,
-      vector: vectorRef.current,
-      mapId,
-      rotation,
-      renderingType: instance.getRenderingType(),
-    })
-    instance.setHeading(rotation)
-  }, [ready, heading])
-
-  /**
-   * Keep the camera rotated while a heading is wanted.
-   *
-   * Google discards a heading applied while the vector map is still coming up,
-   * so this re-asserts it. It runs on a timer rather than reacting to map
-   * events precisely so it can never become a feedback loop — at most one
-   * `setHeading` per tick — and it is a no-op when no heading is wanted, which
-   * is every screen except active navigation.
-   */
-  useEffect(() => {
-    if (!ready) return
-    const id = window.setInterval(() => {
-      const instance = map.current
-      const want = desiredHeading.current
-      if (!instance || want === null) return
-      if (instance.getRenderingType() === 'RASTER') return
-      const current = instance.getHeading() ?? 0
-      if (Math.abs(current - want) <= 0.5) return
-      if (headingAttempts.current >= MAX_HEADING_ATTEMPTS) return
-      headingAttempts.current += 1
-      instance.setHeading(want)
-    }, 1000)
-    return () => window.clearInterval(id)
-  }, [ready])
 
   if (failed) {
     return (

@@ -13,6 +13,7 @@ interface HostShellProps {
   showBack?: boolean
   showNav?: boolean
   className?: string
+  headerRight?: ReactNode
 }
 
 export function HostShell({
@@ -22,6 +23,7 @@ export function HostShell({
   showBack = false,
   showNav = true,
   className,
+  headerRight,
 }: HostShellProps) {
   const navigate = useNavigate()
 
@@ -52,7 +54,7 @@ export function HostShell({
             ) : null}
           </div>
         </div>
-        <WalletPill />
+        {headerRight ?? <WalletPill />}
       </header>
       <main className={cn('screen-enter flex-1 px-4 pb-6', className)}>
         {children}

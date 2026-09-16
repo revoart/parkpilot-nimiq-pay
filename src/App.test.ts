@@ -18,6 +18,8 @@ const EXPECTED_ROUTES = [
   '/pass/:id',
   '/session/:id',
   '/my-parking',
+  '/messages',
+  '/messages/:id',
   '/saved',
   '/profile',
   '/notifications',

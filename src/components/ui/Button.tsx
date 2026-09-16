@@ -3,7 +3,14 @@ import type { ButtonHTMLAttributes } from 'react'
 import { cn } from '@/utils/cn'
 import { haptic } from '@/utils/haptics'
 
-type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
+type Variant =
+  | 'primary'
+  | 'secondary'
+  | 'outline'
+  | 'ghost'
+  | 'danger'
+  | 'accent'
+  | 'warning'
 type Size = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -39,11 +46,15 @@ export function Button({
         size === 'sm' && 'h-9 rounded-xl px-3.5 text-[13px]',
         size === 'md' && 'h-11 rounded-xl px-4 text-[14px]',
         size === 'lg' && 'h-12 rounded-xl px-5 text-[15px]',
-        variant === 'primary' && 'bg-ink text-on-ink',
-        variant === 'secondary' && 'bg-surface text-ink',
+        variant === 'primary' &&
+          'bg-brand-fill text-brand-fg shadow-[0_4px_12px_rgba(76,130,255,0.12)]',
+        variant === 'secondary' &&
+          'border border-line-strong bg-surface-raised text-ink',
         variant === 'outline' && 'border border-line-strong text-ink',
-        variant === 'ghost' && 'text-ink',
-        variant === 'danger' && 'bg-danger text-on-ink',
+        variant === 'ghost' && 'text-brand',
+        variant === 'danger' && 'bg-danger-bg text-danger',
+        variant === 'accent' && 'bg-accent text-on-ink',
+        variant === 'warning' && 'border border-warning text-warning',
         full && 'w-full',
         className,
       )}

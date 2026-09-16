@@ -13,6 +13,9 @@ export default defineConfig({
     include: [
       'src/**/*.test.ts',
       'supabase/functions/**/*.test.ts',
+      // Operator tooling lives outside src/ so treasury code never reaches the
+      // client bundle, but its pure helpers still need testing.
+      'scripts/**/*.test.ts',
     ],
   },
 })

@@ -1,19 +1,26 @@
 /// <reference types="google.maps" />
 
+import { normalizeAngle } from './camera'
+
 export type GoogleMapsNamespace = typeof google.maps
 
 export const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 const CHANNEL = import.meta.env.VITE_GOOGLE_MAPS_TRACKING_ID
 
 /**
- * Optional cloud-styled Map ID.
+ * The build-time Map ID, read on each call rather than captured once at module
+ * load. Reading it lazily keeps `resolveMapId` testable, because the value can
+ * be stubbed per case instead of being frozen when the module first imports.
  *
  * When present the map renders vector tiles, which is what enables camera
  * rotation (`setHeading`). Without it the map is raster and rotation is
  * silently ignored — so the UI must not offer it. Google's own styles are
  * ignored once a Map ID is set, because styling moves to the cloud.
  */
-const ENV_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined
+function envMapId(): string | null {
+  const value = (import.meta.env.VITE_GOOGLE_MAPS_MAP_ID ?? '').trim()
+  return value.length > 0 ? value : null
+}
 
 /** Where a Map ID can be supplied at runtime instead of at build time. */
 export const MAP_ID_OVERRIDE_KEY = 'parkpilot.map_id'
@@ -44,8 +51,7 @@ function runtimeMapId(): string | null {
 export function resolveMapId(): string | null {
   const override = runtimeMapId()
   if (override) return override
-  const value = (ENV_MAP_ID ?? '').trim()
-  return value.length > 0 ? value : null
+  return envMapId()
 }
 
 export function hasMapId(): boolean {
@@ -179,37 +185,62 @@ function svgIcon(svg: string, width: number, height: number, anchorX: number, an
   }
 }
 
+/**
+ * Cache of built icons, keyed by the values that actually change their pixels.
+ *
+ * Every icon is an SVG data URL, so rebuilding one allocates a string, a `Size`
+ * and a `Point`, and — more expensively — forces the browser to decode a brand
+ * new image. Marker sync runs on each render and the heading arrow changes on
+ * every GPS fix, so without this the map re-decodes every icon continuously
+ * while driving. Icons are immutable, so sharing them is safe.
+ */
+const iconCache = new Map<string, MapIcon>()
+
+function cachedIcon(key: string, build: () => MapIcon): MapIcon {
+  const hit = iconCache.get(key)
+  if (hit) return hit
+  const icon = build()
+  iconCache.set(key, icon)
+  return icon
+}
+
 /** Price pill with a pointer — black when selected, white otherwise. */
 export function priceIcon(label: string, active: boolean): MapIcon {
-  const w = Math.max(46, 20 + label.length * 10)
-  const bg = active ? '#0F0F0F' : '#FFFFFF'
-  const fg = active ? '#FFFFFF' : '#0F0F0F'
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="40" viewBox="0 0 ${w} 40">
+  return cachedIcon(`price|${label}|${active ? 1 : 0}`, () => {
+    const w = Math.max(46, 20 + label.length * 10)
+    const bg = active ? '#0F0F0F' : '#FFFFFF'
+    const fg = active ? '#FFFFFF' : '#0F0F0F'
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="40" viewBox="0 0 ${w} 40">
     <rect x="1" y="1" rx="13" width="${w - 2}" height="26" fill="${bg}" stroke="rgba(0,0,0,0.12)"/>
     <path d="M${w / 2 - 5} 26 L${w / 2} 34 L${w / 2 + 5} 26 Z" fill="${bg}"/>
     <text x="${w / 2}" y="19" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="13" font-weight="700" fill="${fg}">${label}</text>
   </svg>`
-  return svgIcon(svg, w, 40, w / 2, 34)
+    return svgIcon(svg, w, 40, w / 2, 34)
+  })
 }
 
 /** Solid dot used for the device position and generic points. */
 export function dotIcon(color: string): MapIcon {
-  const size = 26
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  return cachedIcon(`dot|${color}`, () => {
+    const size = 26
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     <circle cx="13" cy="13" r="9" fill="${color}" stroke="#FFFFFF" stroke-width="3"/>
   </svg>`
-  return svgIcon(svg, size, size, 13, 13)
+    return svgIcon(svg, size, size, 13, 13)
+  })
 }
 
 /** Circular pin carrying the first letter of a label. */
 export function pinIcon(label?: string): MapIcon {
   const letter = (label ?? '').trim().slice(0, 1).replace(/[^A-Za-z0-9]/g, '') || 'P'
-  const size = 34
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  return cachedIcon(`pin|${letter.toUpperCase()}`, () => {
+    const size = 34
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     <circle cx="17" cy="17" r="14" fill="#0F0F0F" stroke="#FFFFFF" stroke-width="3"/>
     <text x="17" y="22" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="14" font-weight="700" fill="#FFFFFF">${letter.toUpperCase()}</text>
   </svg>`
-  return svgIcon(svg, size, size, 17, 17)
+    return svgIcon(svg, size, size, 17, 17)
+  })
 }
 
 /**
@@ -217,13 +248,15 @@ export function pinIcon(label?: string): MapIcon {
  * price pills so parking and the final destination never read as the same thing.
  */
 export function destinationIcon(): MapIcon {
-  const size = 34
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  return cachedIcon('destination', () => {
+    const size = 34
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
     <circle cx="17" cy="17" r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="3"/>
     <circle cx="17" cy="17" r="8" fill="none" stroke="#FFFFFF" stroke-width="2"/>
     <circle cx="17" cy="17" r="2.5" fill="#FFFFFF"/>
   </svg>`
-  return svgIcon(svg, size, size, 17, 17)
+    return svgIcon(svg, size, size, 17, 17)
+  })
 }
 
 /**
@@ -232,13 +265,37 @@ export function destinationIcon(): MapIcon {
  * map itself is raster and cannot rotate.
  */
 export function headingIcon(heading: number | null): MapIcon {
-  const size = 36
-  const rotation = heading === null || Number.isNaN(heading) ? 0 : heading
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    <g transform="rotate(${rotation} 18 18)">
+  const raw = heading === null || !Number.isFinite(heading) ? 0 : heading
+  // Quantise the rotation into 2 degree buckets so the cache stays small. At
+  // this marker size the step is invisible, and it means a slowly turning
+  // driver reuses one icon instead of decoding a new image every fix.
+  const bucket = Math.round(normalizeAngle(raw) / 2) * 2
+  return cachedIcon(`heading|${bucket}`, () => {
+    const size = 36
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <g transform="rotate(${bucket} 18 18)">
       <circle cx="18" cy="18" r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2.5"/>
       <path d="M18 8 L25 25 L18 20.5 L11 25 Z" fill="#FFFFFF"/>
     </g>
   </svg>`
-  return svgIcon(svg, size, size, 18, 18)
+    return svgIcon(svg, size, size, 18, 18)
+  })
+}
+
+/**
+ * The driver's position on a heading-up map.
+ *
+ * When the camera itself rotates to the direction of travel, rotating this
+ * marker too would point it the wrong way — so it is a fixed arrow aimed at the
+ * top of the screen and the map supplies the heading.
+ */
+export function fixedArrowIcon(): MapIcon {
+  return cachedIcon('arrow|fixed', () => {
+    const size = 36
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="18" cy="18" r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2.5"/>
+    <path d="M18 8 L25 25 L18 20.5 L11 25 Z" fill="#FFFFFF"/>
+  </svg>`
+    return svgIcon(svg, size, size, 18, 18)
+  })
 }

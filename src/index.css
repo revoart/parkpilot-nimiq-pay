@@ -23,6 +23,9 @@
 
   --color-brand: #2e6bff;
   --color-brand-strong: #1e54d8;
+  /* Solid brand fill (buttons, pills) — identical in both themes, per the
+     Figma component sheet where Primary LG is #2E6BFF with white text. */
+  --color-brand-fill: #2e6bff;
   --color-brand-fg: #ffffff;
 
   --color-success: #15803d;
@@ -33,6 +36,8 @@
   --color-danger-bg: #fee2e2;
   --color-star: #f59e0b;
   --color-map: #ede9df;
+  /* Polygon brand purple, used by the chain badge. */
+  --color-polygon: #8247e5;
 
   --font-sans:
     'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
@@ -70,7 +75,8 @@
 
   --color-brand: #4c82ff;
   --color-brand-strong: #6f9cff;
-  --color-brand-fg: #0b0b0c;
+  --color-brand-fill: #2e6bff;
+  --color-brand-fg: #ffffff;
 
   --color-success: #4ade80;
   --color-success-bg: #14301f;

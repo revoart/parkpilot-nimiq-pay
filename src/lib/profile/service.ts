@@ -9,6 +9,10 @@ export interface Profile {
   bio: string | null
   avatar_url: string | null
   evm_address: string
+  /** Your own number, shown to you whether or not you share it. */
+  phone: string | null
+  /** Whether a booking counterparty may see the number. Off by default. */
+  phone_shared: boolean
 }
 
 export const MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -20,6 +24,8 @@ function normalize(row: Record<string, unknown> | undefined): Profile {
     bio: (row?.bio as string | null) ?? null,
     avatar_url: (row?.avatar_url as string | null) ?? null,
     evm_address: String(row?.evm_address ?? ''),
+    phone: (row?.phone as string | null) ?? null,
+    phone_shared: Boolean(row?.phone_shared),
   }
 }
 
@@ -48,6 +54,8 @@ export async function updateProfile(
     displayName?: string | null
     bio?: string | null
     avatarUrl?: string | null
+    phone?: string | null
+    phoneShared?: boolean
   },
 ): Promise<Profile> {
   const supabase = getSupabase()
@@ -60,6 +68,8 @@ export async function updateProfile(
   if (input.displayName !== undefined) body.display_name = input.displayName
   if (input.bio !== undefined) body.bio = input.bio
   if (input.avatarUrl !== undefined) body.avatar_url = input.avatarUrl
+  if (input.phone !== undefined) body.phone = input.phone
+  if (input.phoneShared !== undefined) body.phone_shared = input.phoneShared
 
   const { data, error } = await supabase.functions.invoke('update-profile', {
     body,

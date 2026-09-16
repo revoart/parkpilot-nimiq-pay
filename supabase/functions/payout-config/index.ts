@@ -1,0 +1,82 @@
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
+import { readToken, verifyToken } from '../_shared/auth.ts'
+import { errorResponse, json, preflight } from '../_shared/http.ts'
+import { isAuthorizedSettler } from '../_shared/payouts.ts'
+
+/**
+ * Everything the local signer needs before it touches a key.
+ *
+ * Read-only, and deliberately the first call the script makes: it asserts the
+ * configured treasury address matches the one the mnemonic derives to, and
+ * refuses to continue if it does not. Checking before claiming means a
+ * misconfigured signer never takes a payout it cannot send.
+ */
+Deno.serve(async (request) => {
+  const options = preflight(request)
+  if (options) return options
+  if (request.method !== 'POST') {
+    return errorResponse(request, 'Method not allowed', 405)
+  }
+
+  try {
+    const body = (await request.json().catch(() => null)) as {
+      evm_address?: string
+      auth_token?: string
+    } | null
+    if (!body) return errorResponse(request, 'Invalid JSON body.')
+
+    const caller = await verifyToken(readToken(request, body))
+    if (!caller) {
+      return errorResponse(request, 'Sign in with your wallet to continue.', 401)
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    )
+
+    const { allowed, config } = await isAuthorizedSettler(supabase, caller)
+    if (!allowed) return errorResponse(request, 'Not authorized.', 403)
+
+    const { data: settings } = await supabase
+      .from('platform_settings')
+      .select('key, value')
+      .in('key', [
+        'payouts_enabled',
+        'max_payout_usdt',
+        'daily_payout_cap_usdt',
+        'min_payout_usdt',
+      ])
+
+    const read = (key: string, fallback: number): number => {
+      const row = (settings ?? []).find((entry) => entry.key === key)
+      const value = row ? Number(row.value) : NaN
+      return Number.isFinite(value) ? value : fallback
+    }
+
+    const enabledRow = (settings ?? []).find(
+      (entry) => entry.key === 'payouts_enabled',
+    )
+
+    return json(request, {
+      treasury_address: config.treasuryAddress,
+      operator_addresses: config.operatorAddresses,
+      payouts_enabled: enabledRow?.value === true,
+      max_payout_usdt: read('max_payout_usdt', 100),
+      daily_payout_cap_usdt: read('daily_payout_cap_usdt', 500),
+      min_payout_usdt: read('min_payout_usdt', 1),
+      chain_id: Number(Deno.env.get('POLYGON_CHAIN_ID') ?? 137),
+      usdt_contract:
+        Deno.env.get('USDT_CONTRACT_ADDRESS') ??
+        '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+    })
+  } catch (error) {
+    console.error('payout-config failed', error)
+    return errorResponse(
+      request,
+      error instanceof Error ? error.message : 'Unexpected error',
+      500,
+    )
+  }
+})

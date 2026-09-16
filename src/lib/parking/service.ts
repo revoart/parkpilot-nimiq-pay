@@ -39,6 +39,8 @@ export async function listNearbyParking(
     ...row,
     price_usdt: Number(row.price_usdt),
     distance_m: Number(row.distance_m),
+    rating_avg: row.rating_avg === null ? null : Number(row.rating_avg),
+    rating_count: Number(row.rating_count ?? 0),
   }))
 }
 

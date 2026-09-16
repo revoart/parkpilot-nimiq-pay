@@ -16,6 +16,15 @@ export interface MapAppearance {
 export interface MapInitOptions extends MapAppearance {
   /** Present only for vector maps. Set once, at construction. */
   mapId?: string
+  /**
+   * Explicitly request vector rendering.
+   *
+   * A Map ID alone is not enough: one created as Raster, or belonging to a
+   * project the API key cannot see, leaves the map on the raster renderer where
+   * `setHeading` is silently ignored. Asking for vector here makes the intent
+   * explicit, and the option overrides whatever the Map ID was configured with.
+   */
+  renderingType?: 'VECTOR'
 }
 
 function appearanceFor(theme: MapTheme, mapId: string | null): MapAppearance {
@@ -38,7 +47,7 @@ export function mapInitOptions(
   mapId: string | null,
 ): MapInitOptions {
   const appearance = appearanceFor(theme, mapId)
-  return mapId ? { mapId, ...appearance } : appearance
+  return mapId ? { mapId, renderingType: 'VECTOR', ...appearance } : appearance
 }
 
 /**

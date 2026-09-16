@@ -1,4 +1,4 @@
-import { Bookmark } from 'lucide-react'
+import { Heart, MapPin } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -37,12 +37,13 @@ export function SavedScreen() {
     <AppShell showNav title="Saved">
       {items.length === 0 ? (
         <EmptyState
-          icon={<Bookmark className="size-5" />}
-          title="No saved places"
-          description="Tap the bookmark on any parking space to save it here."
+          icon={<Heart className="size-6" />}
+          title="No saved listings"
+          description="Tap the heart on any listing to save it for later."
           action={
-            <Button size="md" onClick={() => navigate('/')}>
-              Find parking
+            <Button full variant="secondary" size="md" onClick={() => navigate('/')}>
+              <MapPin className="mr-2 size-4" />
+              Explore Parking
             </Button>
           }
         />
@@ -52,6 +53,7 @@ export function SavedScreen() {
             <SwipeToDelete
               key={saved.id}
               label="Remove"
+              className="shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
               onDelete={() => {
                 removeSaved(saved.id)
                 load()

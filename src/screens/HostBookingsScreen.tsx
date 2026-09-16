@@ -1,8 +1,9 @@
-import { CalendarCheck } from 'lucide-react'
+import { CalendarCheck, MessageSquare } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
+import { UsdtMark } from '@/components/brand/UsdtMark'
 import { HostShell } from '@/components/layout/HostShell'
-import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -14,6 +15,11 @@ import { formatDateLabel, formatTimeLabel, formatUsdt, shortenAddress } from '@/
 import { cn } from '@/utils/cn'
 
 type Tab = 'upcoming' | 'past'
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'past', label: 'Past History' },
+]
 
 const STATUS_LABEL: Record<ReservationStatus, string> = {
   reservation_pending: 'Pending',
@@ -31,7 +37,17 @@ const STATUS_TONE: Record<ReservationStatus, PillTone> = {
   reservation_expired: 'neutral',
 }
 
+function durationLabel(startAt: string, endAt: string): string | null {
+  const minutes = Math.round(
+    (new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000,
+  )
+  if (!Number.isFinite(minutes) || minutes <= 0) return null
+  if (minutes % 60 === 0) return `${minutes / 60} hrs`
+  return `${minutes} min`
+}
+
 export function HostBookingsScreen() {
+  const navigate = useNavigate()
   const wallet = useWallet()
   const [bookings, setBookings] = useState<HostBooking[]>([])
   const [tab, setTab] = useState<Tab>('upcoming')
@@ -89,27 +105,30 @@ export function HostBookingsScreen() {
 
   return (
     <HostShell title="Bookings" subtitle="Host">
-      <div className="space-y-3">
-        <div className="flex gap-1.5">
-          {(['upcoming', 'past'] as Tab[]).map((value) => (
+      <div className="space-y-4">
+        <div className="flex rounded-full border border-line bg-surface-raised p-1">
+          {TABS.map(({ value, label }) => (
             <button
               key={value}
               type="button"
+              aria-pressed={tab === value}
               onClick={() => setTab(value)}
               className={cn(
-                'rounded-xl px-4 py-2 text-[13px] font-bold capitalize transition-colors',
-                tab === value ? 'bg-ink text-on-ink' : 'bg-surface text-ink-muted',
+                'flex-1 rounded-full px-4 py-2 text-[13px] font-bold transition-colors',
+                tab === value
+                  ? 'bg-brand-fill text-brand-fg shadow-[0_4px_12px_rgba(76,130,255,0.12)]'
+                  : 'text-ink-muted',
               )}
             >
-              {value}
+              {label}
             </button>
           ))}
         </div>
 
         {loading ? (
           <div className="space-y-3">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-28 w-full" />
           </div>
         ) : error ? (
           <EmptyState
@@ -128,44 +147,70 @@ export function HostBookingsScreen() {
             description="Bookings for your parking spaces will appear here."
           />
         ) : (
-          <div className="space-y-2">
-            {visible.map((booking) => (
-              <div
-                key={booking.id}
-                className="rounded-2xl bg-surface-raised p-3"
-              >
-                <div className="flex items-start gap-2.5">
-                  <ListingPhoto
-                    imageUrl={booking.parkingSpaceImageUrl}
-                    title={booking.parkingSpaceTitle}
-                    className="size-12 shrink-0 rounded-xl"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-bold">
+          <div className="space-y-3">
+            {visible.map((booking) => {
+              const duration = durationLabel(booking.startAt, booking.endAt)
+              const cleared = booking.paymentStatus === 'payment_confirmed'
+              return (
+                <article
+                  key={booking.id}
+                  className="rounded-2xl border border-line bg-surface-raised p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="min-w-0 flex-1 text-[17px] font-bold leading-[21px] tracking-[-0.3px]">
                       {booking.parkingSpaceTitle}
+                    </h3>
+                    <StatusPill
+                      tone={STATUS_TONE[booking.status]}
+                      className="shrink-0 uppercase tracking-[0.4px]"
+                    >
+                      {STATUS_LABEL[booking.status]}
+                    </StatusPill>
+                  </div>
+
+                  {booking.parkingSpaceAddress ? (
+                    <p className="mt-0.5 truncate text-[13px] text-ink-muted">
+                      {booking.parkingSpaceAddress}
                     </p>
-                    <p className="mt-0.5 text-[12px] text-ink-muted">
-                      {formatDateLabel(booking.startAt)} ·{' '}
+                  ) : null}
+
+                  <p className="mt-1.5 text-[13px] text-ink-muted">
+                    {formatDateLabel(booking.startAt)}{' '}
+                    <span className="text-ink-faint">·</span>{' '}
+                    <span className="font-semibold text-brand">
                       {formatTimeLabel(booking.startAt)} –{' '}
                       {formatTimeLabel(booking.endAt)}
-                    </p>
+                      {duration ? ` (${duration})` : ''}
+                    </span>
+                  </p>
+
+                  {booking.txHash ? (
                     <p className="mt-0.5 font-mono text-[10px] text-ink-faint">
-                      {shortenAddress(booking.txHash ?? booking.id, 6)}
+                      {shortenAddress(booking.txHash, 6)}
                     </p>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/messages/${booking.id}`)}
+                    className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand"
+                  >
+                    <MessageSquare className="size-3.5" />
+                    Message driver
+                  </button>
+
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
+                    <span className="text-[13px] text-ink-muted">
+                      {cleared ? 'Earnings (On-Chain cleared)' : 'Earnings'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-[13px] font-bold text-brand">
+                      <UsdtMark className="size-3.5" />
+                      {formatUsdt(booking.amountUsdt)} USDT
+                    </span>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[14px] font-bold">
-                      {formatUsdt(booking.amountUsdt)}
-                    </p>
-                    <div className="mt-1">
-                      <StatusPill tone={STATUS_TONE[booking.status]}>
-                        {STATUS_LABEL[booking.status]}
-                      </StatusPill>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                </article>
+              )
+            })}
           </div>
         )}
       </div>

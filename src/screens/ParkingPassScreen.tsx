@@ -1,21 +1,25 @@
 import {
+  ArrowRight,
   Car,
+  Check,
   ChevronDown,
   ExternalLink,
   Footprints,
   Loader2,
   MapPin,
   Navigation,
+  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { ParkPilotLogo } from '@/components/brand/Logo'
 import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/Button'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { StateCard } from '@/components/ui/StateCard'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { ConnectWalletPrompt } from '@/components/wallet/ConnectWalletPrompt'
 import { destinationQuery, destinationQueryWith } from '@/hooks/useDestination'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useWallet } from '@/hooks/useWallet'
@@ -57,6 +61,7 @@ export function ParkingPassScreen() {
   const [parked, setParked] = useState<ParkedCar | null>(null)
   const [pendingSave, setPendingSave] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   const destination = useMemo<Destination | null>(() => {
     const row = details?.reservation
@@ -95,7 +100,7 @@ export function ParkingPassScreen() {
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, attempt])
 
   useEffect(() => {
     if (id) setParked(getParkedCar(id))
@@ -125,15 +130,10 @@ export function ParkingPassScreen() {
 
   if (!wallet.address) {
     return (
-      <AppShell showBack title="Parking pass">
-        <EmptyState
-          title="Connect your wallet"
-          description="Connect Nimiq Pay to view your parking pass."
-          action={
-            <Button size="md" onClick={() => void wallet.connect()}>
-              Connect Wallet
-            </Button>
-          }
+      <AppShell showBack title="My Parking Pass">
+        <ConnectWalletPrompt
+          title="Connect Your Wallet"
+          description="Sign in to view your parking pass and booking details."
         />
       </AppShell>
     )
@@ -143,8 +143,38 @@ export function ParkingPassScreen() {
     return (
       <AppShell showBack title="Parking pass">
         <div className="space-y-3">
-          <Skeleton className="h-44 w-full" />
-          <Skeleton className="h-32 w-full" />
+          <div className="flex flex-col items-center pt-1">
+            <Skeleton className="size-16 rounded-full" />
+            <Skeleton className="mt-3 h-7 w-52" />
+            <Skeleton className="mt-2 h-6 w-44 rounded-full" />
+          </div>
+
+          <div className="space-y-3 rounded-2xl bg-surface-raised p-4">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <div className="flex items-start justify-between gap-3 border-t border-dashed border-line pt-3">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+            <div className="border-t border-dashed border-line pt-3">
+              <Skeleton className="mx-auto h-3 w-36" />
+              <Skeleton className="mx-auto mt-2 h-6 w-32" />
+            </div>
+          </div>
+
+          <Skeleton className="h-14 w-full rounded-2xl" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-11 w-full rounded-2xl" />
         </div>
       </AppShell>
     )
@@ -153,10 +183,30 @@ export function ParkingPassScreen() {
   if (error || !details) {
     return (
       <AppShell showBack title="Parking pass">
-        <EmptyState
-          title="Pass not found"
-          description={error ?? 'This reservation is unavailable.'}
-        />
+        <div className="flex min-h-full items-center">
+          <StateCard
+            tone="danger"
+            icon={<ShieldAlert className="size-6" />}
+            title="Pass not found"
+            description={error ?? 'This reservation is unavailable.'}
+          >
+            <Button
+              full
+              size="lg"
+              onClick={() => setAttempt((current) => current + 1)}
+            >
+              Try Again
+            </Button>
+            <Button
+              full
+              size="lg"
+              variant="secondary"
+              onClick={() => navigate(-1)}
+            >
+              Go Back
+            </Button>
+          </StateCard>
+        </div>
       </AppShell>
     )
   }
@@ -183,73 +233,105 @@ export function ParkingPassScreen() {
       }
     >
       <div className="space-y-3">
-        {/* Digital ticket: one surface, no nested cards. */}
-        <div className="overflow-hidden rounded-2xl bg-surface-raised">
-          <div className="flex flex-col items-center px-4 pt-4 text-center">
-            <ParkPilotLogo className="mb-3" markClassName="h-6" />
-            <div className="mb-3 flex size-16 items-center justify-center rounded-full bg-success-bg">
-              {confirmed ? (
-                <svg className="size-8" fill="none" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="12" fill="#DCFCE7" />
-                  <polyline
-                    className="check-path"
-                    points="5 12 10 17 19 7"
-                    stroke="#15803D"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              ) : (
-                <Loader2 className="size-7 animate-spin text-warning" />
-              )}
-            </div>
-
-            <h1
-              className="text-[19px] font-bold tracking-[-0.4px]"
-              role="status"
-              aria-live="polite"
-            >
-              {confirmed ? 'Parking reserved.' : 'Confirming payment…'}
-            </h1>
-
-            <div className="mt-2.5">
-              <StatusPill tone={confirmed ? 'success' : 'warning'}>
-                {confirmed ? 'PAID' : 'PENDING'}
-              </StatusPill>
-            </div>
+        <div className="flex flex-col items-center pt-1 text-center">
+          <div className="flex size-16 items-center justify-center rounded-full border-2 border-success/60 bg-success-bg">
+            {confirmed ? (
+              <Check className="size-8 text-success" strokeWidth={2.5} />
+            ) : (
+              <Loader2 className="size-7 animate-spin text-warning" />
+            )}
           </div>
-
-          <div className="mt-4 border-t border-dashed border-line px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-[15px] font-bold">
-                  {parkingSpace.title}
-                </p>
-                <p className="mt-0.5 text-[12px] text-ink-muted">
-                  {formatDateLabel(reservation.start_at)} ·{' '}
-                  {formatTimeLabel(reservation.start_at)} –{' '}
-                  {formatTimeLabel(reservation.end_at)}
-                </p>
-              </div>
-              <p className="shrink-0 text-[15px] font-bold">
-                {formatUsdt(reservation.amount_usdt)}
-                <span className="ml-0.5 text-[10px] font-medium text-ink-muted">
-                  USDT
-                </span>
-              </p>
-            </div>
-
-            <div className="mt-3">
-              <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-                Booking code
-              </p>
-              <p className="mt-0.5 font-mono text-[19px] font-bold tracking-[1.5px]">
-                {bookingCode}
-              </p>
-            </div>
+          <h1
+            className="mt-3 text-[22px] font-extrabold tracking-[-0.4px]"
+            role="status"
+            aria-live="polite"
+          >
+            {confirmed ? 'Parking Confirmed' : 'Confirming payment…'}
+          </h1>
+          <div className="mt-2">
+            <StatusPill
+              tone={confirmed ? 'success' : 'warning'}
+              className={cn(
+                'rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.4px]',
+                confirmed ? 'border-success/40' : 'border-warning/40',
+              )}
+            >
+              {confirmed
+                ? `${formatUsdt(reservation.amount_usdt)} USDT PAID ON-CHAIN`
+                : 'Awaiting on-chain confirmation'}
+            </StatusPill>
           </div>
         </div>
+
+        {/* Digital ticket: one surface, no nested cards. */}
+        <div className="overflow-hidden rounded-2xl bg-surface-raised p-4">
+          <p className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-brand">
+            Active entry code
+          </p>
+          <p className="mt-1 text-[20px] font-extrabold tracking-[-0.3px]">
+            {parkingSpace.title}
+          </p>
+          <p className="mt-0.5 text-[13px] text-ink-muted">
+            {parkingSpace.address}
+          </p>
+
+          <div className="mt-3 flex items-start justify-between gap-3 border-t border-dashed border-line pt-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+                Arrival
+              </p>
+              <p className="mt-0.5 text-[17px] font-bold">
+                {formatTimeLabel(reservation.start_at)}
+              </p>
+              <p className="text-[12px] text-ink-muted">
+                {formatDateLabel(reservation.start_at)}
+              </p>
+            </div>
+            <ArrowRight className="mt-5 size-4 shrink-0 text-brand" />
+            <div className="min-w-0 text-right">
+              <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+                Departure
+              </p>
+              <p className="mt-0.5 text-[17px] font-bold">
+                {formatTimeLabel(reservation.end_at)}
+              </p>
+              <p className="text-[12px] text-ink-muted">
+                {formatDateLabel(reservation.end_at)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 border-t border-dashed border-line pt-3 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-[1.2px] text-ink-faint">
+              Booking monospace code
+            </p>
+            <p className="mt-1 font-mono text-[20px] font-bold tracking-[1.5px] text-brand">
+              {bookingCode}
+            </p>
+          </div>
+        </div>
+
+        {txHash ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-brand/40 bg-surface-raised px-3.5 py-3">
+            <ShieldCheck className="size-5 shrink-0 text-success" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-bold">On-chain Proof Verified</p>
+              <p className="truncate text-[12px] text-ink-muted">
+                Polygon Tx:{' '}
+                <span className="font-mono">{shortenAddress(txHash, 4)}</span>
+              </p>
+            </div>
+            <a
+              href={explorerTxUrl(txHash)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="View transaction on PolygonScan"
+              className="flex size-8 shrink-0 items-center justify-center rounded-xl text-brand"
+            >
+              <ExternalLink className="size-4" />
+            </a>
+          </div>
+        ) : null}
 
         {/* Stage 1: drive to the parking space. Never the destination. */}
         <Button
