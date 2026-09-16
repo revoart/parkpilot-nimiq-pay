@@ -359,11 +359,6 @@ export function PaymentScreen() {
     void loadDetails()
   }, [loadDetails])
 
-  useEffect(() => {
-    void wallet.refreshBalances()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet.address])
-
   const amountLuna = useMemo(
     () => (details ? nimToLuna(String(details.reservation.amount_nim)) : 0n),
     [details],

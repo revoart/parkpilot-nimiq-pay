@@ -7,143 +7,125 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { formatUnits } from 'viem'
 
 import { trackEvent } from '@/lib/analytics/events'
 import { clearAuthToken } from '@/lib/auth'
-import { POLYGON_CHAIN_ID_HEX } from '@/lib/ethereum/chains'
-import {
-  isUserRejection,
-  userFacingWalletError,
-} from '@/lib/ethereum/errors'
-import * as ethereum from '@/lib/ethereum/provider'
-import { readUsdtBalance } from '@/lib/usdt'
+import { isInsideNimiqPay, listNimiqAccounts } from '@/lib/nimiq'
+
+/**
+ * The connected Nimiq account.
+ *
+ * Nimiq is the only rail now: there is no EVM wallet, no chain to switch to and
+ * no gas token to hold. Connecting asks Nimiq Pay to share the account, which
+ * shows the user a native approval dialog — so this never runs unprompted on
+ * load. The account is remembered for the session instead, and the user can
+ * disconnect to clear it.
+ */
 
 export type WalletStatus =
   | 'unavailable'
   | 'disconnected'
   | 'connecting'
   | 'connected'
-  | 'wrong_network'
   | 'error'
 
 interface WalletContextValue {
+  /** Whether the app is running inside Nimiq Pay. */
   providerAvailable: boolean
   status: WalletStatus
+  /** The Nimiq account address, e.g. `NQ94 FAH0 YLHQ S40D 5B2U XUDR L6XG 3GYU 2JEX`. */
   address: string | null
-  chainId: string | null
-  onPolygon: boolean
-  usdtBalance: string | null
-  polBalance: string | null
   error: string | null
   connect: () => Promise<void>
-  refreshBalances: () => Promise<void>
   disconnect: () => void
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null)
 
+const ADDRESS_KEY = 'parkpilot.nimiq-account'
+
+function readStoredAddress(): string | null {
+  try {
+    return sessionStorage.getItem(ADDRESS_KEY)
+  } catch {
+    return null
+  }
+}
+
+function storeAddress(address: string | null): void {
+  try {
+    if (address) sessionStorage.setItem(ADDRESS_KEY, address)
+    else sessionStorage.removeItem(ADDRESS_KEY)
+  } catch {
+    // A full or unavailable session store is not worth failing a connection for.
+  }
+}
+
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [providerAvailable, setProviderAvailable] = useState(false)
   const [status, setStatus] = useState<WalletStatus>('disconnected')
   const [address, setAddress] = useState<string | null>(null)
-  const [chainId, setChainId] = useState<string | null>(null)
-  const [usdtBalance, setUsdtBalance] = useState<string | null>(null)
-  const [polBalance, setPolBalance] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const onPolygon =
-    chainId?.toLowerCase() === POLYGON_CHAIN_ID_HEX.toLowerCase()
-
   useEffect(() => {
-    const available = ethereum.hasEthereumProvider()
-    setProviderAvailable(available)
-    if (!available) setStatus('unavailable')
+    const inside = isInsideNimiqPay()
+    setProviderAvailable(inside)
 
-    if (available) {
-      // Restore the session fully: an already-authorised wallet must also report
-      // its chain, otherwise the UI shows "wrong network" until the user
-      // reconnects manually even though it is already on Polygon.
-      void Promise.all([ethereum.getAccounts(), ethereum.getChainId()])
-        .then(([accounts, currentChain]) => {
-          if (!accounts.length) return
-          setAddress(accounts[0])
-          setChainId(currentChain)
-          setStatus(
-            currentChain.toLowerCase() === POLYGON_CHAIN_ID_HEX.toLowerCase()
-              ? 'connected'
-              : 'wrong_network',
-          )
-        })
-        .catch(() => undefined)
+    if (!inside) {
+      setStatus('unavailable')
+      return
+    }
+
+    // Restore the session without re-prompting. The wallet is the authority on
+    // which account is active; this only avoids a second approval dialog on a
+    // reload within the same session.
+    const stored = readStoredAddress()
+    if (stored) {
+      setAddress(stored)
+      setStatus('connected')
     }
   }, [])
-
-  const refreshBalances = useCallback(async () => {
-    if (!address) return
-    try {
-      const [usdt, pol] = await Promise.all([
-        readUsdtBalance(address),
-        ethereum.getNativeBalance(address),
-      ])
-      setUsdtBalance(usdt)
-      setPolBalance(formatUnits(pol, 18))
-    } catch {
-      // A failed balance read should not break the connection.
-    }
-  }, [address])
-
-  useEffect(() => {
-    if (address) void refreshBalances()
-  }, [address, refreshBalances])
 
   const connect = useCallback(async () => {
     setError(null)
 
-    if (!ethereum.hasEthereumProvider()) {
+    if (!isInsideNimiqPay()) {
       setStatus('unavailable')
-      setError('Open ParkPilot inside Nimiq Pay to connect your wallet.')
+      setError('Open ParkPilot inside Nimiq Pay to connect your account.')
       return
     }
 
     setStatus('connecting')
     try {
-      const accounts = await ethereum.requestAccounts()
-      if (!accounts.length) throw new Error('No wallet account was returned.')
+      const accounts = await listNimiqAccounts()
       const account = accounts[0]
-
-      await ethereum.ensurePolygon()
-      const currentChain = await ethereum.getChainId()
+      if (!account) throw new Error('No Nimiq account was returned.')
 
       setAddress(account)
-      setChainId(currentChain)
-      setStatus(
-        currentChain.toLowerCase() === POLYGON_CHAIN_ID_HEX.toLowerCase()
-          ? 'connected'
-          : 'wrong_network',
-      )
+      storeAddress(account)
+      setStatus('connected')
       void trackEvent('wallet_connected', { evmAddress: account })
-      // Wallet sign-in (EIP-712) is requested lazily by the first write, so
-      // connecting shows only the connect prompt — never a second sign prompt.
+      // Sign-in is requested lazily by the first write, so connecting shows only
+      // the connect prompt — never a second prompt straight after.
     } catch (err) {
-      if (isUserRejection(err)) {
+      // Nimiq Pay reports a declined approval as a permission error.
+      const text = err instanceof Error ? err.message : ''
+      if (/denied|reject|cancel|permission/i.test(text)) {
         setStatus('disconnected')
         setError('Request cancelled.')
       } else {
         setStatus('error')
-        setError(userFacingWalletError(err))
+        setError(text || 'Could not connect your Nimiq account.')
       }
     }
   }, [])
 
   const disconnect = useCallback(() => {
     clearAuthToken()
+    storeAddress(null)
     setAddress(null)
-    setChainId(null)
-    setUsdtBalance(null)
-    setPolBalance(null)
     setError(null)
-    setStatus(ethereum.hasEthereumProvider() ? 'disconnected' : 'unavailable')
+    setStatus(isInsideNimiqPay() ? 'disconnected' : 'unavailable')
   }, [])
 
   const value = useMemo<WalletContextValue>(
@@ -151,28 +133,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       providerAvailable,
       status,
       address,
-      chainId,
-      onPolygon: Boolean(onPolygon),
-      usdtBalance,
-      polBalance,
       error,
       connect,
-      refreshBalances,
       disconnect,
     }),
-    [
-      providerAvailable,
-      status,
-      address,
-      chainId,
-      onPolygon,
-      usdtBalance,
-      polBalance,
-      error,
-      connect,
-      refreshBalances,
-      disconnect,
-    ],
+    [providerAvailable, status, address, error, connect, disconnect],
   )
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>

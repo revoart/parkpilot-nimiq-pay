@@ -1,17 +1,20 @@
 import { LogOut, RefreshCw, Wallet } from 'lucide-react'
 
+import { NimiqMark } from '@/components/brand/NimiqMark'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
+import { useNimBalance } from '@/hooks/useNimBalance'
 import { useWallet, type WalletStatus } from '@/hooks/useWallet'
-import { formatUsdt, shortenAddress } from '@/utils/format'
+import { lunaToNim } from '@/lib/nimiq'
+import { formatNim, shortenAddress } from '@/utils/format'
 
 const statusLabel: Record<WalletStatus, string> = {
   unavailable: 'Wallet unavailable',
   disconnected: 'Not connected',
   connecting: 'Connecting…',
   connected: 'Connected',
-  wrong_network: 'Wrong network',
   error: 'Error',
 }
 
@@ -23,12 +26,14 @@ const statusTone: Record<
   disconnected: 'neutral',
   connecting: 'accent',
   connected: 'success',
-  wrong_network: 'warning',
   error: 'danger',
 }
 
 export function WalletCard() {
   const wallet = useWallet()
+  const { balanceLuna, loading, refresh } = useNimBalance(wallet.address)
+
+  const nim = balanceLuna === null ? null : lunaToNim(balanceLuna)
 
   return (
     <Card className="space-y-3">
@@ -39,7 +44,7 @@ export function WalletCard() {
           </span>
           <div>
             <p className="text-[14px] font-semibold">Wallet</p>
-            <p className="text-[11px] text-ink-muted">USDT on Polygon</p>
+            <p className="text-[11px] text-ink-muted">NIM on Nimiq</p>
           </div>
         </div>
         <StatusPill tone={statusTone[wallet.status]}>
@@ -49,39 +54,32 @@ export function WalletCard() {
 
       {!wallet.providerAvailable ? (
         <p className="rounded-xl bg-surface p-3 text-[13px] text-ink-soft">
-          Open ParkPilot inside Nimiq Pay to connect your wallet.
+          Open ParkPilot inside Nimiq Pay to connect your account.
         </p>
       ) : wallet.address ? (
         <div className="space-y-2.5">
           <div className="rounded-xl bg-surface p-3">
-            <p className="text-[11px] text-ink-muted">Address</p>
+            <p className="text-[11px] text-ink-muted">Nimiq address</p>
             <p className="font-mono text-[13px]">
               {shortenAddress(wallet.address, 6)}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="rounded-xl bg-surface p-3">
-              <p className="text-[11px] text-ink-muted">USDT</p>
-              <p className="text-[17px] font-semibold">
-                {wallet.usdtBalance === null
-                  ? '—'
-                  : formatUsdt(wallet.usdtBalance)}
-              </p>
+          <div className="rounded-xl bg-surface p-3">
+            <div className="flex items-center gap-1.5">
+              <NimiqMark className="size-4" />
+              <p className="text-[11px] text-ink-muted">Balance</p>
             </div>
-            <div className="rounded-xl bg-surface p-3">
-              <p className="text-[11px] text-ink-muted">POL (gas)</p>
-              <p className="text-[17px] font-semibold">
-                {wallet.polBalance === null
-                  ? '—'
-                  : Number(wallet.polBalance).toFixed(4)}
-              </p>
-            </div>
+            <p className="text-[17px] font-semibold">
+              {nim === null ? '—' : `${formatNim(nim)} NIM`}
+            </p>
+            <UsdEquivalent nim={nim} className="text-[12px] text-ink-muted" />
           </div>
           <div className="flex gap-2">
             <Button
               variant="secondary"
               size="md"
-              onClick={() => void wallet.refreshBalances()}
+              onClick={() => void refresh()}
+              loading={loading}
             >
               <RefreshCw className="size-4" />
               Refresh
@@ -97,7 +95,7 @@ export function WalletCard() {
           onClick={() => void wallet.connect()}
           loading={wallet.status === 'connecting'}
         >
-          Connect Wallet
+          Connect Account
         </Button>
       )}
 

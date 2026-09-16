@@ -1,52 +1,96 @@
-import { verifyTypedData } from 'npm:viem@2'
+import { ed25519 } from 'npm:@noble/curves@1/ed25519'
+import { blake2b } from 'npm:@noble/hashes@1/blake2b'
 
-const DOMAIN = {
-  name: 'ParkPilot',
-  version: '1',
-  chainId: 137,
-} as const
+import {
+  isValidNimiqAddress,
+  nimiqAddressFromDigest,
+  normalizeNimiqAddress,
+} from './nimiq.ts'
 
-export const AUTH_TYPES = {
-  ParkPilotAuth: [
-    { name: 'address', type: 'address' },
-    { name: 'nonce', type: 'string' },
-    { name: 'issuedAt', type: 'string' },
-  ],
-} as const
+/**
+ * Wallet authentication.
+ *
+ * The wallet signs a one-time challenge; the backend verifies it and issues a
+ * short-lived session token. Every write endpoint derives the acting wallet from
+ * that token, so the app can only act as an account it controls.
+ *
+ * Nimiq Pay's `sign()` takes a plain string rather than EIP-712 structured data,
+ * so the challenge is a short human-readable message. That is a feature: the
+ * approval dialog shows the user exactly what they are signing, and the message
+ * names ParkPilot so a signature harvested here is meaningless anywhere else.
+ */
 
 export interface AuthMessage {
-  address: `0x${string}`
+  address: string
   nonce: string
   issuedAt: string
 }
 
-export function buildTypedData(message: AuthMessage) {
-  return {
-    domain: DOMAIN,
-    types: AUTH_TYPES,
-    primaryType: 'ParkPilotAuth' as const,
-    message,
-  }
+/**
+ * The identity key for an account: stripped and lowercased.
+ *
+ * Nimiq's base32 alphabet is uppercase and addresses are case-insensitive, and
+ * the SQL that keys ledger accounts compares with `lower(...)`, so one canonical
+ * form avoids two spellings of one account.
+ */
+export function nimiqIdentity(value: string): string {
+  return value.replace(/\s+/g, '').toLowerCase()
+}
+
+/**
+ * The exact text the wallet signs.
+ *
+ * Reconstructed identically on both sides — every field the user sees is part of
+ * the message, so nothing can be swapped out after they approve it.
+ */
+export function buildAuthMessage(message: AuthMessage): string {
+  return [
+    'ParkPilot sign-in',
+    `Address: ${normalizeNimiqAddress(message.address)}`,
+    `Nonce: ${message.nonce}`,
+    `Issued at: ${message.issuedAt}`,
+  ].join('\n')
 }
 
 export function isValidAddress(value: unknown): value is string {
-  return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value)
+  return isValidNimiqAddress(value)
 }
 
-/** Verify an EIP-712 ParkPilotAuth signature against the claimed address. */
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  }
+  return bytes
+}
+
+/**
+ * Verify a Nimiq sign-in.
+ *
+ * Two things must hold, and the first is the one that actually protects the
+ * account: the supplied public key must derive to the address being claimed.
+ * Without that check, anyone could sign with their own key and present someone
+ * else's address, and the signature would verify perfectly.
+ */
 export async function verifyAuthSignature(
   message: AuthMessage,
-  signature: string,
+  signatureHex: string,
+  publicKeyHex: string,
 ): Promise<boolean> {
   try {
-    return await verifyTypedData({
-      address: message.address,
-      domain: DOMAIN,
-      types: AUTH_TYPES,
-      primaryType: 'ParkPilotAuth',
-      message,
-      signature: signature as `0x${string}`,
-    })
+    if (!/^[0-9a-fA-F]{64}$/.test(publicKeyHex)) return false
+    if (!/^[0-9a-fA-F]{128}$/.test(signatureHex)) return false
+    if (!isValidNimiqAddress(message.address)) return false
+
+    const publicKey = hexToBytes(publicKeyHex)
+    const signature = hexToBytes(signatureHex)
+
+    // Nimiq derives the address from the first 20 bytes of Blake2b-256(pubkey).
+    const derived = nimiqAddressFromDigest(blake2b(publicKey, { dkLen: 32 }))
+    if (nimiqIdentity(derived) !== nimiqIdentity(message.address)) return false
+
+    const payload = new TextEncoder().encode(buildAuthMessage(message))
+    return ed25519.verify(signature, payload, publicKey)
   } catch {
     return false
   }
@@ -89,7 +133,7 @@ function secret(): string {
 /** Issue a signed token binding a wallet address to an expiry. */
 export async function issueToken(address: string): Promise<string> {
   const payload = JSON.stringify({
-    a: address.toLowerCase(),
+    a: nimiqIdentity(address),
     exp: Date.now() + TOKEN_TTL_MS,
   })
   const encoded = base64url(encoder.encode(payload))
@@ -113,9 +157,9 @@ export async function verifyToken(token: unknown): Promise<string | null> {
       exp?: number
     }
     if (!payload.a || !payload.exp || payload.exp < Date.now()) return null
-    if (!isValidAddress(payload.a)) return null
+    if (!isValidNimiqAddress(payload.a)) return null
 
-    return payload.a.toLowerCase()
+    return nimiqIdentity(payload.a)
   } catch {
     return null
   }

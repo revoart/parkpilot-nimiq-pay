@@ -3,15 +3,19 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import {
   isValidAddress,
   issueToken,
+  nimiqIdentity,
   verifyAuthSignature,
 } from '../_shared/auth.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
+  nimiq_address?: string
+  /** Accepted so a client mid-upgrade still works. */
   evm_address?: string
   nonce?: string
   issued_at?: string
   signature?: string
+  public_key?: string
 }
 
 /** Verifies the signed challenge and returns a session token. */
@@ -25,14 +29,19 @@ Deno.serve(async (request) => {
   try {
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')
-    if (!isValidAddress(body.evm_address)) {
-      return errorResponse(request, 'Invalid wallet address.')
+
+    const claimed = body.nimiq_address ?? body.evm_address
+    if (!isValidAddress(claimed)) {
+      return errorResponse(request, 'Invalid Nimiq address.')
     }
-    if (!body.nonce || !body.issued_at || !body.signature) {
-      return errorResponse(request, 'Missing challenge, timestamp or signature.')
+    if (!body.nonce || !body.issued_at || !body.signature || !body.public_key) {
+      return errorResponse(
+        request,
+        'Missing challenge, timestamp, signature or public key.',
+      )
     }
 
-    const address = body.evm_address.toLowerCase()
+    const identity = nimiqIdentity(claimed)
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -42,7 +51,7 @@ Deno.serve(async (request) => {
     const { data: challenge, error } = await supabase
       .from('auth_challenges')
       .select('id, used, expires_at')
-      .ilike('evm_address', address)
+      .ilike('evm_address', identity)
       .eq('nonce', body.nonce)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -57,12 +66,9 @@ Deno.serve(async (request) => {
     }
 
     const valid = await verifyAuthSignature(
-      {
-        address: body.evm_address as `0x${string}`,
-        nonce: body.nonce,
-        issuedAt: body.issued_at,
-      },
+      { address: claimed, nonce: body.nonce, issuedAt: body.issued_at },
       body.signature,
+      body.public_key,
     )
 
     if (!valid) {
@@ -74,9 +80,9 @@ Deno.serve(async (request) => {
       .update({ used: true })
       .eq('id', challenge.id)
 
-    const token = await issueToken(address)
+    const token = await issueToken(claimed)
 
-    return json(request, { token, address })
+    return json(request, { token, address: identity })
   } catch (error) {
     console.error('auth-verify failed', error)
     return errorResponse(

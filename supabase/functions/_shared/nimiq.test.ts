@@ -1,16 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  ADDRESS_BYTES,
   DEFAULT_NIMIQ_RPC_ENDPOINTS,
   NIMIQ_MAINNET_ID,
   NIMIQ_TESTNET_ID,
   NimiqRpcError,
+  decodeNimiqAddress,
+  encodeNimiqAddress,
   getNimiqAccount,
   getNimiqBlockNumber,
   getNimiqTransaction,
   isNimiqConsensusEstablished,
   isValidNimiqAddress,
+  lunaToNim,
+  nimiqAddressFromDigest,
   nimiqAddressesEqual,
+  nimToLuna,
   normalizeNimiqAddress,
   resolveNimiqEndpoints,
   sendNimiqRawTransaction,
@@ -280,5 +286,99 @@ describe('network queries', () => {
   it('exposes the Albatross network ids', () => {
     expect(NIMIQ_MAINNET_ID).toBe(24)
     expect(NIMIQ_TESTNET_ID).toBe(5)
+  })
+})
+
+describe('address codec', () => {
+  /**
+   * Official vectors from the Nimiq Albatross serialization reference. The hex
+   * values are Blake2b digests of known public keys, so these pin the encoding
+   * to the protocol rather than to our own output.
+   */
+  const VECTOR_HEX = '689dae2f77b048dcc08e14d73104ea14222b5be1'
+  const VECTOR_NQ = 'NQ17D2ESUBTPN14DRG4E2KBK217A2GH2NNY1'
+  /** The zero address — Nimiq's burn address. */
+  const BURN = 'NQ0700000000000000000000000000000000'
+  /** The all-0x11 address, chosen in the reference for easy recognition. */
+  const ALL_ONES = 'NQ34248H248H248H248H248H248H248H248H'
+
+  const bytes = (hex: string) =>
+    Uint8Array.from(
+      hex.match(/.{2}/g)!.map((pair) => parseInt(pair, 16)),
+    )
+
+  it('encodes the reference digest to its user-friendly address', () => {
+    expect(encodeNimiqAddress(bytes(VECTOR_HEX))).toBe(VECTOR_NQ)
+  })
+
+  it('encodes the zero address to the burn address', () => {
+    expect(encodeNimiqAddress(new Uint8Array(ADDRESS_BYTES))).toBe(BURN)
+  })
+
+  it('encodes the all-0x11 address to the reference value', () => {
+    expect(encodeNimiqAddress(new Uint8Array(ADDRESS_BYTES).fill(0x11))).toBe(
+      ALL_ONES,
+    )
+  })
+
+  it('round-trips through decode', () => {
+    for (const value of [VECTOR_NQ, BURN, ALL_ONES]) {
+      expect(encodeNimiqAddress(decodeNimiqAddress(value))).toBe(value)
+    }
+  })
+
+  it('decodes to the original bytes', () => {
+    expect(Array.from(decodeNimiqAddress(VECTOR_NQ))).toEqual(
+      Array.from(bytes(VECTOR_HEX)),
+    )
+  })
+
+  it('derives an address from a public key digest', () => {
+    expect(nimiqAddressFromDigest(bytes(VECTOR_HEX))).toBe(VECTOR_NQ)
+  })
+
+  it('rejects wrong-length input', () => {
+    expect(() => encodeNimiqAddress(new Uint8Array(19))).toThrow()
+    expect(() => nimiqAddressFromDigest(new Uint8Array(19))).toThrow()
+    expect(() => decodeNimiqAddress('nonsense')).toThrow()
+  })
+})
+
+describe('amounts', () => {
+  it('converts NIM to Luna', () => {
+    expect(nimToLuna('1')).toBe(100_000n)
+    expect(nimToLuna('5000')).toBe(500_000_000n)
+    expect(nimToLuna('0.01')).toBe(1_000n)
+    expect(nimToLuna('0.00001')).toBe(1n)
+    expect(nimToLuna(2)).toBe(200_000n)
+    expect(nimToLuna(3n)).toBe(300_000n)
+  })
+
+  it('avoids binary floating-point drift', () => {
+    expect(nimToLuna('0.1')).toBe(10_000n)
+    expect(nimToLuna('0.3')).toBe(30_000n)
+  })
+
+  it('rejects precision finer than one Luna rather than truncating', () => {
+    expect(() => nimToLuna('0.000001')).toThrow(/smaller than one Luna/)
+    expect(() => nimToLuna('1.123456')).toThrow(/smaller than one Luna/)
+  })
+
+  it('rejects malformed input', () => {
+    expect(() => nimToLuna('abc')).toThrow(/Invalid NIM amount/)
+    expect(() => nimToLuna('-1')).toThrow(/Invalid NIM amount/)
+  })
+
+  it('converts Luna back to NIM', () => {
+    expect(lunaToNim(100_000n)).toBe('1')
+    expect(lunaToNim(1n)).toBe('0.00001')
+    expect(lunaToNim(500_000_000n)).toBe('5000')
+    expect(lunaToNim(0n)).toBe('0')
+  })
+
+  it('round-trips', () => {
+    for (const value of ['0', '1', '0.00001', '5000', '123.45678']) {
+      expect(lunaToNim(nimToLuna(value))).toBe(value)
+    }
   })
 })

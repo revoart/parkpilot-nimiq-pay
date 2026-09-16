@@ -23,16 +23,8 @@ export function WalletPill({ className }: { className?: string }) {
         <NimiqMark className="size-4" />
         <span className="truncate">{shortenAddress(wallet.address, 4)}</span>
         <ChainBadge />
-        <span
-          aria-hidden="true"
-          className={cn(
-            'size-1.5 shrink-0 rounded-full',
-            wallet.onPolygon ? 'bg-success' : 'bg-warning',
-          )}
-        />
-        <span className="sr-only">
-          {wallet.onPolygon ? 'Connected to Polygon' : 'Wrong network'}
-        </span>
+        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />
+        <span className="sr-only">Connected to Nimiq</span>
       </span>
     )
   }

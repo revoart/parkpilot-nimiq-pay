@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-import { buildTypedData, isValidAddress } from '../_shared/auth.ts'
+import { buildAuthMessage, isValidAddress, nimiqIdentity } from '../_shared/auth.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 const CHALLENGE_TTL_MS = 10 * 60_000
@@ -13,7 +13,13 @@ function randomNonce(): string {
     .join('')
 }
 
-/** Issues a one-time EIP-712 challenge for the wallet to sign. */
+/**
+ * Issues a one-time sign-in challenge.
+ *
+ * Returns the exact text to sign, not structured data: Nimiq Pay's `sign()`
+ * takes a string, and the wallet's approval dialog shows it verbatim, so the
+ * user can read what they are authorising.
+ */
 Deno.serve(async (request) => {
   const options = preflight(request)
   if (options) return options
@@ -23,11 +29,15 @@ Deno.serve(async (request) => {
 
   try {
     const body = (await request.json().catch(() => null)) as {
+      nimiq_address?: string
+      /** Accepted so a client mid-upgrade still works. */
       evm_address?: string
     } | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')
-    if (!isValidAddress(body.evm_address)) {
-      return errorResponse(request, 'Invalid wallet address.')
+
+    const address = body.nimiq_address ?? body.evm_address
+    if (!isValidAddress(address)) {
+      return errorResponse(request, 'Invalid Nimiq address.')
     }
 
     const supabase = createClient(
@@ -41,10 +51,9 @@ Deno.serve(async (request) => {
     const nonce = randomNonce()
     const issuedAt = new Date().toISOString()
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS).toISOString()
-    const address = body.evm_address as `0x${string}`
 
     const { error } = await supabase.from('auth_challenges').insert({
-      evm_address: address.toLowerCase(),
+      evm_address: nimiqIdentity(address),
       nonce,
       expires_at: expiresAt,
     })
@@ -54,7 +63,7 @@ Deno.serve(async (request) => {
       nonce,
       issued_at: issuedAt,
       expires_at: expiresAt,
-      typed_data: buildTypedData({ address, nonce, issuedAt }),
+      message: buildAuthMessage({ address, nonce, issuedAt }),
     })
   } catch (error) {
     console.error('auth-challenge failed', error)

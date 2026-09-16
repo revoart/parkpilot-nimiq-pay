@@ -37,8 +37,8 @@ import {
   type ReservationSummary,
 } from '@/lib/reservations'
 import { cn } from '@/utils/cn'
-import { listNimiqAccounts, lunaToNim } from '@/lib/nimiq'
-import { fetchNimBalance } from '@/lib/nimiq/service'
+import { useNimBalance } from '@/hooks/useNimBalance'
+import { lunaToNim } from '@/lib/nimiq'
 import { formatNim, shortenAddress } from '@/utils/format'
 import { formatPhone, telHref } from '@/utils/phone'
 
@@ -126,32 +126,8 @@ export function ProfileScreen() {
   const [dataLoading, setDataLoading] = useState(false)
 
   // The driver's NIM lives on the Nimiq chain, so it is read from the chain
-  // rather than from the EVM wallet.
-  const [nimBalance, setNimBalance] = useState<number | null>(null)
-  const [nimAccount, setNimAccount] = useState<string | null>(null)
-
-  const loadNimBalance = useCallback(async () => {
-    try {
-      const accounts = await listNimiqAccounts()
-      const account = accounts[0] ?? null
-      setNimAccount(account)
-      if (!account) {
-        setNimBalance(null)
-        return
-      }
-      const balance = await fetchNimBalance(account)
-      setNimBalance(balance.balance_luna)
-    } catch {
-      // Outside Nimiq Pay, or the node is unreachable — show nothing rather
-      // than a number we cannot stand behind.
-      setNimBalance(null)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (mode !== 'driver') return
-    void loadNimBalance()
-  }, [mode, loadNimBalance])
+  // rather than from the wallet's EVM provider.
+  const { balanceLuna, refresh: refreshNimBalance } = useNimBalance(wallet.address)
 
   useEffect(() => {
     if (!wallet.address || mode !== 'driver') return
@@ -321,33 +297,27 @@ export function ProfileScreen() {
                 <div className="flex items-baseline gap-2">
                   <NimiqMark className="size-8 shrink-0 self-center" />
                   <span className="text-[34px] font-extrabold leading-none tracking-[-1px]">
-                    {nimBalance === null
+                    {balanceLuna === null
                       ? '—'
-                      : formatNim(lunaToNim(nimBalance))}
+                      : formatNim(lunaToNim(balanceLuna))}
                   </span>
                   <span className="text-[20px] font-extrabold leading-none text-brand">
                     NIM
                   </span>
                 </div>
                 <UsdEquivalent
-                  nim={nimBalance === null ? null : lunaToNim(nimBalance)}
+                  nim={balanceLuna === null ? null : lunaToNim(balanceLuna)}
                   className="text-[13px] text-ink-muted"
                 />
 
-                {nimAccount ? (
-                  <p className="truncate text-[12px] text-ink-faint">
-                    {shortenAddress(nimAccount)}
-                  </p>
-                ) : (
-                  <p className="text-[12px] leading-5 text-ink-faint">
-                    Open ParkPilot inside Nimiq Pay to see your NIM balance.
-                  </p>
-                )}
+                <p className="truncate font-mono text-[12px] text-ink-faint">
+                  {wallet.address}
+                </p>
 
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => void loadNimBalance()}
+                    onClick={() => void refreshNimBalance()}
                     className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand active:opacity-90"
                   >
                     <RefreshCw className="size-4" />

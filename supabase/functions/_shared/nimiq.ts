@@ -122,6 +122,61 @@ export function isValidNimiqAddress(value: unknown): value is string {
   return ibanChecksum(stripped) === 1
 }
 
+/** Raw address length in bytes. */
+export const ADDRESS_BYTES = 20
+
+/** Encode 20 raw address bytes as a user-friendly NQ address. */
+export function encodeNimiqAddress(bytes: Uint8Array): string {
+  if (bytes.length !== ADDRESS_BYTES) {
+    throw new Error(`Nimiq addresses are ${ADDRESS_BYTES} bytes.`)
+  }
+
+  let bits = 0n
+  for (const byte of bytes) bits = (bits << 8n) | BigInt(byte)
+
+  let encoded = ''
+  for (let i = 31; i >= 0; i--) {
+    encoded += NIMIQ_ALPHABET[Number((bits >> BigInt(i * 5)) & 31n)]
+  }
+
+  const checksum = 98 - ibanChecksum(`${COUNTRY_CODE}00${encoded}`)
+  return `${COUNTRY_CODE}${String(checksum).padStart(2, '0')}${encoded}`
+}
+
+/** Decode a user-friendly address back to its 20 raw bytes. */
+export function decodeNimiqAddress(value: string): Uint8Array {
+  if (!isValidNimiqAddress(value)) {
+    throw new Error('Invalid Nimiq address: cannot decode.')
+  }
+
+  const encoded = normalizeNimiqAddress(value).slice(COUNTRY_CODE.length)
+  let bits = 0n
+  for (const char of encoded) {
+    bits = (bits << 5n) | BigInt(NIMIQ_ALPHABET.indexOf(char))
+  }
+
+  const bytes = new Uint8Array(ADDRESS_BYTES)
+  for (let i = 0; i < ADDRESS_BYTES; i++) {
+    bytes[i] = Number((bits >> BigInt((ADDRESS_BYTES - 1 - i) * 8)) & 255n)
+  }
+  return bytes
+}
+
+/**
+ * Derive the address from a 32-byte public key digest.
+ *
+ * Nimiq takes the first 20 bytes of the Blake2b-256 digest of the public key.
+ * The hashing itself lives in `./auth.ts` so this module stays dependency-free
+ * and unit testable; this half — the encoding — is the part worth testing
+ * against the protocol's published vectors.
+ */
+export function nimiqAddressFromDigest(digest: Uint8Array): string {
+  if (digest.length < ADDRESS_BYTES) {
+    throw new Error('A Nimiq address digest is at least 20 bytes.')
+  }
+  return encodeNimiqAddress(digest.slice(0, ADDRESS_BYTES))
+}
+
 export function nimiqAddressesEqual(a: string, b: string): boolean {
   if (!isValidNimiqAddress(a) || !isValidNimiqAddress(b)) return false
   return normalizeNimiqAddress(a) === normalizeNimiqAddress(b)
