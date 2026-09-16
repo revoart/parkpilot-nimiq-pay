@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { HostNav } from '@/components/layout/HostNav'
+import { ScreenFooter } from '@/components/layout/ScreenFooter'
 import { WalletPill } from '@/components/wallet/WalletPill'
 import { cn } from '@/utils/cn'
 
@@ -14,6 +15,11 @@ interface HostShellProps {
   showNav?: boolean
   className?: string
   headerRight?: ReactNode
+  /**
+   * Primary action pinned to the bottom. Shares one sticky wrapper with the
+   * nav so the two stack instead of overlapping.
+   */
+  footer?: ReactNode
 }
 
 export function HostShell({
@@ -24,6 +30,7 @@ export function HostShell({
   showNav = true,
   className,
   headerRight,
+  footer,
 }: HostShellProps) {
   const navigate = useNavigate()
 
@@ -59,7 +66,15 @@ export function HostShell({
       <main className={cn('screen-enter flex-1 px-4 pb-6', className)}>
         {children}
       </main>
-      {showNav ? <HostNav /> : null}
+      {footer || showNav ? (
+        <div className="sticky bottom-0 z-[1100]">
+          {footer ? (
+            // The nav owns the inset when it is present, since it is bottom-most.
+            <ScreenFooter safeArea={!showNav}>{footer}</ScreenFooter>
+          ) : null}
+          {showNav ? <HostNav /> : null}
+        </div>
+      ) : null}
     </div>
   )
 }

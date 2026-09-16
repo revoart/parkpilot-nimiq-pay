@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { ParkPilotLogo } from '@/components/brand/Logo'
 import { BottomNav } from '@/components/layout/BottomNav'
+import { ScreenFooter } from '@/components/layout/ScreenFooter'
 import { WalletPill } from '@/components/wallet/WalletPill'
 import { cn } from '@/utils/cn'
 
@@ -15,6 +16,14 @@ interface AppShellProps {
   showNav?: boolean
   /** Optional header action, rendered before the wallet pill. */
   action?: ReactNode
+  /**
+   * Primary action pinned to the bottom of the screen.
+   *
+   * The footer and the nav share one sticky wrapper so they stack rather than
+   * fighting for the same position — two siblings both set to `bottom-0` would
+   * otherwise overlap.
+   */
+  footer?: ReactNode
   /**
    * Full-bleed layout for map-first screens (no padding). A `title` or
    * `showBack` still renders the header above the map.
@@ -30,6 +39,7 @@ export function AppShell({
   showWallet = true,
   showNav = false,
   action,
+  footer,
   bleed = false,
   className,
 }: AppShellProps) {
@@ -74,7 +84,15 @@ export function AppShell({
       >
         {children}
       </main>
-      {showNav ? <BottomNav /> : null}
+      {footer || showNav ? (
+        <div className="sticky bottom-0 z-[1100]">
+          {footer ? (
+            // The nav owns the inset when it is present, since it is bottom-most.
+            <ScreenFooter safeArea={!showNav}>{footer}</ScreenFooter>
+          ) : null}
+          {showNav ? <BottomNav /> : null}
+        </div>
+      ) : null}
     </div>
   )
 }

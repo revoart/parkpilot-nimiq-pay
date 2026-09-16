@@ -278,7 +278,32 @@ export function SessionScreen() {
       : 'Parking session'
 
   return (
-    <AppShell showBack title={headerTitle}>
+    <AppShell
+      showBack
+      title={headerTitle}
+      footer={
+        <div className="space-y-2">
+          <Button
+            variant="ghost"
+            full
+            size="lg"
+            onClick={() => navigate(`/pass/${reservation.id}`)}
+          >
+            View parking pass
+          </Button>
+          {phase === 'complete' ? (
+            <Button
+              full
+              size="lg"
+              variant="secondary"
+              onClick={() => navigate(`/parking/${parkingSpace.id}`)}
+            >
+              Book this space again
+            </Button>
+          ) : null}
+        </div>
+      }
+    >
       <div className="space-y-3">
         <Card className="flex flex-col items-center gap-5 py-5">
           {phase === 'complete' ? (
@@ -457,17 +482,6 @@ export function SessionScreen() {
           </Card>
         ) : null}
 
-        {phase === 'complete' ? (
-          <Button
-            full
-            size="lg"
-            variant="secondary"
-            onClick={() => navigate(`/parking/${parkingSpace.id}`)}
-          >
-            Book this space again
-          </Button>
-        ) : null}
-
         {error ? <p className="text-sm text-danger">{error}</p> : null}
 
         {notice ? (
@@ -486,15 +500,6 @@ export function SessionScreen() {
             Cancel reservation
           </Button>
         ) : null}
-
-        <Button
-          variant="ghost"
-          full
-          size="lg"
-          onClick={() => navigate(`/pass/${reservation.id}`)}
-        >
-          View parking pass
-        </Button>
       </div>
 
       <BottomSheet

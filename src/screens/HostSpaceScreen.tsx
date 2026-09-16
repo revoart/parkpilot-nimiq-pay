@@ -258,7 +258,35 @@ export function HostSpaceScreen() {
   }
 
   return (
-    <HostShell showBack title="Edit Space" showNav={false}>
+    <HostShell
+      showBack
+      title="Edit Space"
+      showNav={false}
+      footer={
+        // Save and Pause only. Deleting is destructive and stays in the body,
+        // so it is never the most prominent thing pinned to the screen.
+        <div className="space-y-2">
+          <Button
+            full
+            size="lg"
+            onClick={() => void handleSave()}
+            loading={saving}
+            disabled={!photoUrl}
+          >
+            Save changes
+          </Button>
+          <Button
+            full
+            size="lg"
+            variant="warning"
+            onClick={() => void handleToggleActive()}
+            disabled={saving}
+          >
+            {space.active ? 'Pause Listing' : 'Activate Listing'}
+          </Button>
+        </div>
+      }
+    >
       <div className="space-y-3">
         <Card className="flex items-center gap-3 border border-line p-2.5">
           <ListingPhoto
@@ -433,26 +461,6 @@ export function HostSpaceScreen() {
 
         {message ? <p className="text-sm text-success">{message}</p> : null}
         {error ? <p className="text-sm text-danger">{error}</p> : null}
-
-        <Button
-          full
-          size="lg"
-          onClick={() => void handleSave()}
-          loading={saving}
-          disabled={!photoUrl}
-        >
-          Save changes
-        </Button>
-
-        <Button
-          full
-          size="lg"
-          variant="warning"
-          onClick={() => void handleToggleActive()}
-          disabled={saving}
-        >
-          {space.active ? 'Pause Listing' : 'Activate Listing'}
-        </Button>
 
         {confirmDelete ? (
           <Card className="space-y-3 border border-line">

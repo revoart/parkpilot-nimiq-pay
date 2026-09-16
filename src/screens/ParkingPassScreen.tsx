@@ -231,6 +231,41 @@ export function ParkingPassScreen() {
           Done
         </button>
       }
+      footer={
+        // The two legs stay together: driving to the space, then walking from
+        // it, are one journey and are confusing apart.
+        <div className="space-y-2">
+          {/* Stage 1: drive to the parking space. Never the destination. */}
+          <Button
+            full
+            size="lg"
+            onClick={() =>
+              navigate(
+                `/navigate/${parkingSpace.id}${destinationQuery(destination)}`,
+              )
+            }
+          >
+            <Navigation className="size-4" />
+            Navigate to Parking
+          </Button>
+
+          {destination ? (
+            <Button
+              variant="outline"
+              full
+              size="lg"
+              onClick={() =>
+                navigate(
+                  `/navigate/${parkingSpace.id}${destinationQueryWith(destination, { leg: 'walk' })}`,
+                )
+              }
+            >
+              <Footprints className="size-4" />
+              Walk to Destination
+            </Button>
+          ) : null}
+        </div>
+      }
     >
       <div className="space-y-3">
         <div className="flex flex-col items-center pt-1 text-center">
@@ -331,36 +366,6 @@ export function ParkingPassScreen() {
               <ExternalLink className="size-4" />
             </a>
           </div>
-        ) : null}
-
-        {/* Stage 1: drive to the parking space. Never the destination. */}
-        <Button
-          full
-          size="lg"
-          onClick={() =>
-            navigate(
-              `/navigate/${parkingSpace.id}${destinationQuery(destination)}`,
-            )
-          }
-        >
-          <Navigation className="size-4" />
-          Navigate to Parking
-        </Button>
-
-        {destination ? (
-          <Button
-            variant="outline"
-            full
-            size="lg"
-            onClick={() =>
-              navigate(
-                `/navigate/${parkingSpace.id}${destinationQueryWith(destination, { leg: 'walk' })}`,
-              )
-            }
-          >
-            <Footprints className="size-4" />
-            Walk to Destination
-          </Button>
         ) : null}
 
         {/* One slim row instead of another full-width button. */}

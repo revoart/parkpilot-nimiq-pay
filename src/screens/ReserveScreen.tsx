@@ -425,7 +425,23 @@ export function ReserveScreen() {
   const busy = submitting || wallet.status === 'connecting'
 
   return (
-    <AppShell showBack title="Reserve Parking">
+    <AppShell
+      showBack
+      title="Reserve Parking"
+      footer={
+        <Button
+          full
+          size="lg"
+          className="gap-2"
+          onClick={() => void handleContinue()}
+          loading={busy}
+          disabled={slots.length === 0}
+        >
+          {!busy ? <UsdtMark className="size-4" /> : null}
+          Confirm &amp; Pay {formatUsdt(total)} USDT
+        </Button>
+      }
+    >
       <div className="flex min-h-full flex-col">
         <div className="flex-1">
           <div className="flex items-center gap-3 rounded-2xl bg-surface-raised p-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
@@ -519,18 +535,6 @@ export function ReserveScreen() {
           {submitError ? (
             <p className="mt-3 text-sm text-danger">{submitError}</p>
           ) : null}
-
-          <Button
-            full
-            size="lg"
-            className="mt-4 gap-2"
-            onClick={() => void handleContinue()}
-            loading={busy}
-            disabled={slots.length === 0}
-          >
-            {!busy ? <UsdtMark className="size-4" /> : null}
-            Confirm &amp; Pay {formatUsdt(total)} USDT
-          </Button>
         </div>
       </div>
 

@@ -123,7 +123,27 @@ export function HostWalletScreen() {
   const feePercent = data ? (data.fee_bps / 100).toFixed(0) : '10'
 
   return (
-    <HostShell title="Earnings">
+    <HostShell
+      title="Earnings"
+      footer={
+        // Only once the wallet has loaded: the CTA reads `data`, and there is
+        // nothing to withdraw from while the screen is still fetching.
+        data ? (
+          <Button
+            full
+            size="lg"
+            variant="accent"
+            disabled={data.available < data.min_payout_usdt}
+            onClick={() => {
+              setNotice(null)
+              setOpen(true)
+            }}
+          >
+            Withdraw Earnings
+          </Button>
+        ) : null
+      }
+    >
       {loading ? (
         <div className="space-y-3">
           <Skeleton className="mx-auto h-24 w-48 rounded-2xl" />
@@ -259,19 +279,6 @@ export function HostWalletScreen() {
               </div>
             )}
           </section>
-
-          <Button
-            full
-            size="lg"
-            variant="accent"
-            disabled={data.available < data.min_payout_usdt}
-            onClick={() => {
-              setNotice(null)
-              setOpen(true)
-            }}
-          >
-            Withdraw Earnings
-          </Button>
         </div>
       )}
 

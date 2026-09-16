@@ -33,10 +33,6 @@ import { haversineKm, type LatLng } from '@/utils/geo'
 
 /** The radius the driver can opt into. Widening is never automatic. */
 const WIDER_RADIUS_M = 10_000
-/** Approximate height of the listings panel, so pins stay clear of it. */
-const PANEL_INSET = 236
-/** Collapsed panel height (header row only). */
-const COLLAPSED_INSET = 96
 
 export function HomeScreen() {
   const navigate = useNavigate()
@@ -125,23 +121,31 @@ export function HomeScreen() {
 
   return (
     <AppShell bleed showNav>
-      <div className="absolute inset-0">
-        <ParkingMap
-          spaces={gated ? [] : visible}
-          center={center ?? searchCenter ?? undefined}
-          userLocation={geo.coords}
-          selectedId={selectedId}
-          onSelect={(space) => setSelectedId(space.id)}
-          onCenterChange={setMapCenter}
-          onDragStart={() => {
-            // Get out of the driver's way and stop following.
-            setCollapsed(true)
-            setFollowMe(false)
-          }}
-          bottomInset={collapsed ? COLLAPSED_INSET : PANEL_INSET}
-          className="h-full w-full"
-        />
-      </div>
+      {/*
+        The map and the listings panel are a column, not a stack: the panel sits
+        below the map rather than over it. That is what lets the panel run
+        full-width and flush to the nav, because Google's attribution renders at
+        the bottom of the map element and would otherwise be covered by it.
+      */}
+      <div className="absolute inset-0 flex flex-col">
+        <div className="relative min-h-0 flex-1">
+          <ParkingMap
+            spaces={gated ? [] : visible}
+            center={center ?? searchCenter ?? undefined}
+            userLocation={geo.coords}
+            selectedId={selectedId}
+            onSelect={(space) => setSelectedId(space.id)}
+            onCenterChange={setMapCenter}
+            onDragStart={() => {
+              // Get out of the driver's way and stop following.
+              setCollapsed(true)
+              setFollowMe(false)
+            }}
+            // Nothing is drawn over the map now, so the camera no longer needs
+            // to offset its targets to clear a panel.
+            bottomInset={0}
+            className="h-full w-full"
+          />
 
       {/* Top controls — brand chip and wallet, then a full-width search field. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] space-y-2 p-3">
@@ -209,9 +213,9 @@ export function HomeScreen() {
         ) : null}
       </div>
 
-      {/* Sits above the panel so it never collides with it. */}
+      {/* Inside the map, so it never collides with the panel below. */}
       {!selected && !collapsed && movedAway && mapCenter ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-[268px] z-[1000] flex justify-center px-3">
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[1000] flex justify-center px-3">
           <button
             type="button"
             onClick={() => {
@@ -224,10 +228,12 @@ export function HomeScreen() {
         </div>
       ) : null}
 
-      {/* Selected parking sheet (when a map pin is tapped) */}
+        </div>
+
+      {/* Selected parking panel (when a map pin is tapped) */}
       {selected ? (
-        <div className="sheet-enter absolute inset-x-0 bottom-0 z-[1000] px-3 pb-7">
-          <div className="rounded-2xl bg-surface-raised p-4 shadow-[0_8px_24px_rgba(0,0,0,0.07)]">
+        <div className="sheet-enter relative z-[1000] shrink-0">
+          <div className="rounded-t-2xl bg-surface-raised p-4">
             <Handle />
             <div className="mb-3 flex items-center justify-between gap-3">
               <span className="truncate text-[20px] font-extrabold tracking-[-0.3px]">
@@ -262,9 +268,9 @@ export function HomeScreen() {
           </div>
         </div>
       ) : (
-        /* One collapsible panel, kept clear of Google's attribution strip. */
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1000] px-3 pb-7">
-          <div className="pointer-events-auto rounded-2xl bg-surface-raised/95 shadow-[0_8px_24px_rgba(0,0,0,0.07)] backdrop-blur-sm">
+        /* One collapsible panel, full-width and flush to the nav. */
+        <div className="relative z-[1000] shrink-0">
+          <div className="rounded-t-2xl bg-surface-raised">
             <Handle />
             {!gated && !error ? (
               <div className="flex items-center justify-between gap-2 px-4 pb-1">
@@ -438,6 +444,7 @@ export function HomeScreen() {
           </div>
         </div>
       )}
+      </div>
 
       <WelcomeSheet />
     </AppShell>

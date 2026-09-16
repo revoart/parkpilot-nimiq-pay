@@ -201,6 +201,17 @@ export function HostAddScreen() {
           {step} of {TOTAL}
         </span>
       }
+      footer={
+        <Button
+          full
+          size="lg"
+          onClick={() => void handlePrimary()}
+          loading={submitting}
+          disabled={step === PHOTO_STEP && !photoUrl}
+        >
+          {step < TOTAL ? 'Next Step' : 'Publish parking space'}
+        </Button>
+      }
     >
       <div className="space-y-4">
         {step === 1 ? (
@@ -531,16 +542,6 @@ export function HostAddScreen() {
         ) : null}
 
         {error ? <p className="text-sm text-danger">{error}</p> : null}
-
-        <Button
-          full
-          size="lg"
-          onClick={() => void handlePrimary()}
-          loading={submitting}
-          disabled={step === PHOTO_STEP && !photoUrl}
-        >
-          {step < TOTAL ? 'Next Step' : 'Publish parking space'}
-        </Button>
       </div>
     </HostShell>
   )

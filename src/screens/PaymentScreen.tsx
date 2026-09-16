@@ -611,8 +611,54 @@ export function PaymentScreen() {
     </div>
   )
 
+  /**
+   * The screen's action, pinned to the bottom.
+   *
+   * One footer per state, in the same precedence the body used to render them,
+   * so every state has an action reachable without scrolling. The explanatory
+   * cards stay in the body; only the button moves.
+   */
+  const footerCta =
+    phase === 'confirmed' ? (
+      <Button full size="lg" onClick={() => navigate(`/pass/${reservation.id}`)}>
+        View Parking Pass
+      </Button>
+    ) : processingPhase ? null : !wallet.onPolygon ? (
+      <Button
+        full
+        size="lg"
+        variant="danger"
+        className="bg-danger text-white"
+        onClick={() => void wallet.connect()}
+        loading={wallet.status === 'connecting'}
+      >
+        Switch Network
+      </Button>
+    ) : insufficientUsdt ? (
+      <Button
+        full
+        size="lg"
+        variant="warning"
+        className="border-transparent bg-star text-white"
+        onClick={() => void copyWalletAddress()}
+      >
+        Add Funds
+      </Button>
+    ) : (
+      <Button
+        full
+        size="lg"
+        onClick={() => void handlePay()}
+        disabled={insufficientUsdt || !wallet.onPolygon}
+      >
+        {phase === 'failed'
+          ? 'Try Again'
+          : `Pay ${formatUsdt(reservation.amount_usdt)} USDT`}
+      </Button>
+    )
+
   return (
-    <AppShell showBack title="Payment">
+    <AppShell showBack title="Payment" footer={footerCta}>
       <div className="space-y-4">
         {phase === 'confirmed' ? (
           <>
@@ -642,13 +688,6 @@ export function PaymentScreen() {
               />
             ) : null}
 
-            <Button
-              full
-              size="lg"
-              onClick={() => navigate(`/pass/${reservation.id}`)}
-            >
-              View Parking Pass
-            </Button>
           </>
         ) : processingPhase ? (
           <>
@@ -684,16 +723,6 @@ export function PaymentScreen() {
                 Please switch to Polygon network in your wallet to complete
                 this payment.
               </p>
-              <Button
-                full
-                size="lg"
-                variant="danger"
-                className="mt-3 bg-danger text-white"
-                onClick={() => void wallet.connect()}
-                loading={wallet.status === 'connecting'}
-              >
-                Switch Network
-              </Button>
             </div>
 
             <LifecycleTracker phase="review" />
@@ -721,15 +750,6 @@ export function PaymentScreen() {
                 {shortfall ? ` — ${formatUsdt(shortfall)} USDT short.` : '.'}{' '}
                 Add funds to continue.
               </p>
-              <Button
-                full
-                size="lg"
-                variant="warning"
-                className="mt-3 border-transparent bg-star text-white"
-                onClick={() => void copyWalletAddress()}
-              >
-                Add Funds
-              </Button>
             </div>
 
             <LifecycleTracker phase="review" />
@@ -777,16 +797,6 @@ export function PaymentScreen() {
             ) : null}
 
             <div className="space-y-3 pt-1">
-              <Button
-                full
-                size="lg"
-                onClick={() => void handlePay()}
-                disabled={insufficientUsdt || !wallet.onPolygon}
-              >
-                {phase === 'failed'
-                  ? 'Try Again'
-                  : `Pay ${formatUsdt(reservation.amount_usdt)} USDT`}
-              </Button>
               <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-muted">
                 <ShieldCheck className="size-3.5" />
                 Confirmed in Nimiq Pay. Verified on Polygon before your pass is

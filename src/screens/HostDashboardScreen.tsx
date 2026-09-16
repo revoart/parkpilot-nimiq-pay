@@ -114,7 +114,18 @@ export function HostDashboardScreen() {
   }
 
   return (
-    <HostShell title="Host Dashboard">
+    <HostShell
+      title="Host Dashboard"
+      footer={
+        // The no-wallet state returns its own shell above, so only the loading
+        // and error branches still need excluding here.
+        !loading && !error ? (
+          <Button full size="lg" onClick={() => navigate('/host/add')}>
+            Add Parking Space
+          </Button>
+        ) : null
+      }
+    >
       {loading ? (
         <div className="space-y-5" aria-busy="true">
           <div className="grid grid-cols-3 gap-2.5">
@@ -317,11 +328,6 @@ export function HostDashboardScreen() {
               </div>
             )}
           </section>
-
-          <Button full size="lg" onClick={() => navigate('/host/add')}>
-            <Plus className="mr-2 size-4" />
-            Add Parking Space
-          </Button>
         </div>
       )}
 

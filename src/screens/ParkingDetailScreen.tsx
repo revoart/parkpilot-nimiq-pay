@@ -223,7 +223,37 @@ export function ParkingDetailScreen() {
     : null
 
   return (
-    <AppShell bleed>
+    <AppShell
+      bleed
+      footer={
+        // Kept as a pair: navigating there and reserving it are the same
+        // decision, and splitting them across the fold loses that.
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            size="lg"
+            className="flex-1"
+            onClick={() =>
+              navigate(
+                `/navigate/${space.id}${destinationQuery(destination)}`,
+              )
+            }
+          >
+            <Navigation className="mr-1.5 size-4" />
+            Navigate
+          </Button>
+          <Button
+            size="lg"
+            className="flex-1"
+            onClick={() =>
+              navigate(`/reserve/${space.id}${destinationQuery(destination)}`)
+            }
+          >
+            Reserve Spot
+          </Button>
+        </div>
+      }
+    >
       <div className="absolute inset-0 flex flex-col">
         <div className="relative h-[30%] shrink-0">
           <ParkingMap
@@ -404,30 +434,6 @@ export function ParkingDetailScreen() {
               </p>
             </div>
 
-            <div className="mt-6 flex items-center gap-3">
-              <Button
-                variant="secondary"
-                size="lg"
-                className="flex-1"
-                onClick={() =>
-                  navigate(
-                    `/navigate/${space.id}${destinationQuery(destination)}`,
-                  )
-                }
-              >
-                <Navigation className="mr-1.5 size-4" />
-                Navigate
-              </Button>
-              <Button
-                size="lg"
-                className="flex-1"
-                onClick={() =>
-                  navigate(`/reserve/${space.id}${destinationQuery(destination)}`)
-                }
-              >
-                Reserve Spot
-              </Button>
-            </div>
           </div>
         </div>
       </div>
