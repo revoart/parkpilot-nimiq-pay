@@ -43,7 +43,7 @@ Deno.serve(async (request) => {
     const { data, error } = await supabase
       .from('reservations')
       .select(
-        'id, parking_space_id, evm_address, start_at, end_at, amount_usdt, status, created_at, parking_spaces ( title, address, image_url ), payments ( status, tx_hash, amount_usdt, confirmed_at )',
+        'id, parking_space_id, evm_address, start_at, end_at, amount_nim, status, created_at, parking_spaces ( title, address, image_url ), payments ( status, tx_hash, amount_nim, confirmed_at )',
       )
       .in('parking_space_id', ids)
       .order('start_at', { ascending: false })

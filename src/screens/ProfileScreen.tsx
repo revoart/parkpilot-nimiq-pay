@@ -12,7 +12,6 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { NimiqMark } from '@/components/brand/NimiqMark'
-import { UsdtMark } from '@/components/brand/UsdtMark'
 import { AppShell } from '@/components/layout/AppShell'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { Avatar } from '@/components/profile/Avatar'
@@ -21,6 +20,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { ChainBadge } from '@/components/wallet/ChainBadge'
 import { NimiqIdentityCard } from '@/components/wallet/NimiqIdentityCard'
 import { useAppMode, type AppMode } from '@/hooks/useAppMode'
@@ -37,7 +37,9 @@ import {
   type ReservationSummary,
 } from '@/lib/reservations'
 import { cn } from '@/utils/cn'
-import { formatUsdt, shortenAddress } from '@/utils/format'
+import { listNimiqAccounts, lunaToNim } from '@/lib/nimiq'
+import { fetchNimBalance } from '@/lib/nimiq/service'
+import { formatNim, shortenAddress } from '@/utils/format'
 import { formatPhone, telHref } from '@/utils/phone'
 
 interface Row {
@@ -122,6 +124,34 @@ export function ProfileScreen() {
   const [hostWallet, setHostWallet] = useState<HostWallet | null>(null)
   const [hostSpaces, setHostSpaces] = useState<HostSpace[]>([])
   const [dataLoading, setDataLoading] = useState(false)
+
+  // The driver's NIM lives on the Nimiq chain, so it is read from the chain
+  // rather than from the EVM wallet.
+  const [nimBalance, setNimBalance] = useState<number | null>(null)
+  const [nimAccount, setNimAccount] = useState<string | null>(null)
+
+  const loadNimBalance = useCallback(async () => {
+    try {
+      const accounts = await listNimiqAccounts()
+      const account = accounts[0] ?? null
+      setNimAccount(account)
+      if (!account) {
+        setNimBalance(null)
+        return
+      }
+      const balance = await fetchNimBalance(account)
+      setNimBalance(balance.balance_luna)
+    } catch {
+      // Outside Nimiq Pay, or the node is unreachable — show nothing rather
+      // than a number we cannot stand behind.
+      setNimBalance(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (mode !== 'driver') return
+    void loadNimBalance()
+  }, [mode, loadNimBalance])
 
   useEffect(() => {
     if (!wallet.address || mode !== 'driver') return
@@ -289,21 +319,35 @@ export function ProfileScreen() {
                 </div>
 
                 <div className="flex items-baseline gap-2">
-                  <UsdtMark className="size-8 shrink-0 self-center" />
+                  <NimiqMark className="size-8 shrink-0 self-center" />
                   <span className="text-[34px] font-extrabold leading-none tracking-[-1px]">
-                    {wallet.usdtBalance === null
+                    {nimBalance === null
                       ? '—'
-                      : formatUsdt(wallet.usdtBalance)}
+                      : formatNim(lunaToNim(nimBalance))}
                   </span>
                   <span className="text-[20px] font-extrabold leading-none text-brand">
-                    USDT
+                    NIM
                   </span>
                 </div>
+                <UsdEquivalent
+                  nim={nimBalance === null ? null : lunaToNim(nimBalance)}
+                  className="text-[13px] text-ink-muted"
+                />
+
+                {nimAccount ? (
+                  <p className="truncate text-[12px] text-ink-faint">
+                    {shortenAddress(nimAccount)}
+                  </p>
+                ) : (
+                  <p className="text-[12px] leading-5 text-ink-faint">
+                    Open ParkPilot inside Nimiq Pay to see your NIM balance.
+                  </p>
+                )}
 
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => void wallet.refreshBalances()}
+                    onClick={() => void loadNimBalance()}
                     className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand active:opacity-90"
                   >
                     <RefreshCw className="size-4" />
@@ -325,7 +369,7 @@ export function ProfileScreen() {
                   <ChainBadge />
                 </div>
                 <p className="text-[14px] leading-5 text-ink-muted">
-                  Connect your wallet to see your USDT balance and pay for
+                  Connect your wallet to see your NIM balance and pay for
                   parking.
                 </p>
                 <Button
@@ -360,8 +404,12 @@ export function ProfileScreen() {
                             {activityLabel(item.reservation.start_at)}
                           </span>
                         </span>
-                        <span className="shrink-0 text-[15px] font-bold text-brand">
-                          {formatUsdt(item.reservation.amount_usdt)} USDT
+                        <span className="shrink-0 text-right text-[15px] font-bold text-brand">
+                          {formatNim(item.reservation.amount_nim)} NIM
+                          <UsdEquivalent
+                            nim={item.reservation.amount_nim}
+                            className="mt-0.5 block text-[11px] font-medium text-ink-muted"
+                          />
                         </span>
                       </button>
                     </Card>
@@ -382,27 +430,45 @@ export function ProfileScreen() {
               </div>
 
               <div className="flex items-baseline gap-2">
-                <UsdtMark className="size-8 shrink-0 self-center" />
+                <NimiqMark className="size-8 shrink-0 self-center" />
                 <span className="text-[34px] font-extrabold leading-none tracking-[-1px]">
-                  {hostWallet ? formatUsdt(hostWallet.available) : '—'}
+                  {hostWallet ? formatNim(hostWallet.available) : '—'}
                 </span>
                 <span className="text-[20px] font-extrabold leading-none text-brand">
-                  USDT
+                  NIM
                 </span>
               </div>
+              {hostWallet ? (
+                <UsdEquivalent
+                  nim={hostWallet.available}
+                  className="text-[13px] text-ink-muted"
+                />
+              ) : null}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-surface p-3">
                   <p className="text-[11px] text-ink-muted">Pending</p>
                   <p className="mt-0.5 text-[17px] font-bold leading-none">
-                    {hostWallet ? formatUsdt(hostWallet.pending) : '—'}
+                    {hostWallet ? formatNim(hostWallet.pending) : '—'}
                   </p>
+                  {hostWallet ? (
+                    <UsdEquivalent
+                      nim={hostWallet.pending}
+                      className="mt-1 block text-[10px] text-ink-muted"
+                    />
+                  ) : null}
                 </div>
                 <div className="rounded-xl bg-surface p-3">
                   <p className="text-[11px] text-ink-muted">Total earned</p>
                   <p className="mt-0.5 text-[17px] font-bold leading-none">
-                    {hostWallet ? formatUsdt(hostWallet.totalEarned) : '—'}
+                    {hostWallet ? formatNim(hostWallet.totalEarned) : '—'}
                   </p>
+                  {hostWallet ? (
+                    <UsdEquivalent
+                      nim={hostWallet.totalEarned}
+                      className="mt-1 block text-[10px] text-ink-muted"
+                    />
+                  ) : null}
                 </div>
               </div>
 
@@ -459,7 +525,11 @@ export function ProfileScreen() {
                             {space.title}
                           </span>
                           <span className="block truncate text-[13px] text-ink-muted">
-                            {formatUsdt(space.price_usdt)} USDT / hr
+                            {formatNim(space.price_nim)} NIM / hr{' '}
+                            <UsdEquivalent
+                              nim={space.price_nim}
+                              className="text-ink-faint"
+                            />
                           </span>
                         </span>
                         <StatusPill tone={space.active ? 'success' : 'neutral'}>

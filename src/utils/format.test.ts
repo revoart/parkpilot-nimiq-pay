@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDistanceKm, formatUsdt, shortenAddress } from './format'
+import { formatDistanceKm, formatNim, shortenAddress } from './format'
 
 describe('shortenAddress', () => {
   it('shortens a full wallet address', () => {
@@ -18,25 +18,25 @@ describe('shortenAddress', () => {
   })
 })
 
-describe('formatUsdt', () => {
+describe('formatNim', () => {
   it('formats to two decimals by default', () => {
-    expect(formatUsdt(5)).toBe('5.00')
-    expect(formatUsdt('99.9904')).toBe('99.99')
+    expect(formatNim(5)).toBe('5.00')
+    expect(formatNim('99.9904')).toBe('99.99')
   })
 
   it('formats to the requested precision', () => {
-    expect(formatUsdt('99.9904', 4)).toBe('99.9904')
+    expect(formatNim('99.9904', 4)).toBe('99.9904')
   })
 
   it('falls back to zero for unparseable input', () => {
-    expect(formatUsdt('abc')).toBe('0.00')
-    expect(formatUsdt(Number.NaN)).toBe('0.00')
-    expect(formatUsdt(Number.POSITIVE_INFINITY)).toBe('0.00')
+    expect(formatNim('abc')).toBe('0.00')
+    expect(formatNim(Number.NaN)).toBe('0.00')
+    expect(formatNim(Number.POSITIVE_INFINITY)).toBe('0.00')
   })
 
   it('handles zero and negatives', () => {
-    expect(formatUsdt(0)).toBe('0.00')
-    expect(formatUsdt(-2.5)).toBe('-2.50')
+    expect(formatNim(0)).toBe('0.00')
+    expect(formatNim(-2.5)).toBe('-2.50')
   })
 })
 

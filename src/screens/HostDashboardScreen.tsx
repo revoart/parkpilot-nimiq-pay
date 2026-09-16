@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { SwipeToDelete } from '@/components/ui/SwipeToDelete'
 import { useToast } from '@/components/ui/Toast'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useWallet } from '@/hooks/useWallet'
 import {
   deleteParkingSpace,
@@ -20,7 +21,7 @@ import {
   type HostBooking,
   type HostSpace,
 } from '@/lib/host'
-import { formatDateLabel, formatTimeLabel, formatUsdt } from '@/utils/format'
+import { formatDateLabel, formatTimeLabel, formatNim } from '@/utils/format'
 
 export function HostDashboardScreen() {
   const navigate = useNavigate()
@@ -203,9 +204,24 @@ export function HostDashboardScreen() {
         <div className="space-y-5">
           <div className="grid grid-cols-3 gap-2.5">
             {[
-              { label: 'Earnings', value: formatUsdt(earnedAllTime), tether: true },
-              { label: 'Active spaces', value: String(activeSpaces), tether: false },
-              { label: 'Bookings', value: String(bookings.length), tether: false },
+              {
+                label: 'Earnings',
+                value: formatNim(earnedAllTime),
+                nim: true,
+                amount: earnedAllTime,
+              },
+              {
+                label: 'Active spaces',
+                value: String(activeSpaces),
+                nim: false,
+                amount: 0,
+              },
+              {
+                label: 'Bookings',
+                value: String(bookings.length),
+                nim: false,
+                amount: 0,
+              },
             ].map((stat) => (
               <div
                 key={stat.label}
@@ -215,13 +231,19 @@ export function HostDashboardScreen() {
                   {stat.label}
                 </p>
                 <p className="mt-1.5 flex items-center gap-1 text-[20px] font-extrabold leading-none tracking-[-0.5px]">
-                  {stat.tether ? (
-                    <span aria-hidden="true" className="text-[15px] text-success">
-                      ₮
+                  {stat.value}
+                  {stat.nim ? (
+                    <span className="text-[11px] font-bold text-ink-muted">
+                      NIM
                     </span>
                   ) : null}
-                  {stat.value}
                 </p>
+                {stat.nim ? (
+                  <UsdEquivalent
+                    nim={stat.amount}
+                    className="mt-1 block text-[10px] text-ink-muted"
+                  />
+                ) : null}
               </div>
             ))}
           </div>
@@ -244,7 +266,7 @@ export function HostDashboardScreen() {
               <EmptyState
                 icon={<House className="size-6" />}
                 title="No parking spaces yet"
-                description="List your first parking space and start earning USDT."
+                description="List your first parking space and start earning NIM."
                 action={
                   <Button full size="md" onClick={() => navigate('/host/add')}>
                     <Plus className="mr-2 size-4" />
@@ -283,7 +305,11 @@ export function HostDashboardScreen() {
                           {space.address}
                         </p>
                         <p className="mt-0.5 text-[14px] font-bold text-brand">
-                          {formatUsdt(space.price_usdt)} USDT/hr
+                          {formatNim(space.price_nim)} NIM/hr{' '}
+                          <UsdEquivalent
+                            nim={space.price_nim}
+                            className="text-[12px] font-medium text-ink-muted"
+                          />
                         </p>
                       </div>
                     </button>
@@ -320,8 +346,12 @@ export function HostDashboardScreen() {
                         {formatTimeLabel(booking.endAt)}
                       </p>
                     </div>
-                    <p className="shrink-0 text-[15px] font-bold text-success">
-                      {formatUsdt(booking.amountUsdt)} USDT
+                    <p className="shrink-0 text-right text-[15px] font-bold text-success">
+                      {formatNim(booking.amountNim)} NIM
+                      <UsdEquivalent
+                        nim={booking.amountNim}
+                        className="mt-0.5 block text-[11px] font-medium text-ink-muted"
+                      />
                     </p>
                   </div>
                 ))}

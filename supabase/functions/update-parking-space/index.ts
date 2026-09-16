@@ -12,7 +12,7 @@ interface Body {
   id?: string
   title?: string
   address?: string
-  price_usdt?: number | string
+  price_nim?: number | string
   parking_type?: string
   description?: string | null
   covered?: boolean
@@ -78,12 +78,12 @@ Deno.serve(async (request) => {
       }
       update.address = address
     }
-    if (body.price_usdt !== undefined) {
-      const price = Number(body.price_usdt)
+    if (body.price_nim !== undefined) {
+      const price = Number(body.price_nim)
       if (!Number.isFinite(price) || price <= 0 || price > 100000) {
         return errorResponse(request, 'Price must be greater than 0.')
       }
-      update.price_usdt = price.toFixed(6)
+      update.price_nim = price.toFixed(6)
     }
     if (
       body.parking_type !== undefined &&

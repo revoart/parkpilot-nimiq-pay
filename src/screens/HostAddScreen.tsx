@@ -8,6 +8,7 @@ import { LocationMap } from '@/components/map/LocationMap'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useAddressSuggestions } from '@/hooks/useAddressSuggestions'
 import { useWallet } from '@/hooks/useWallet'
 import {
@@ -163,7 +164,7 @@ export function HostAddScreen() {
         address: address.trim(),
         latitude: lat,
         longitude: lng,
-        priceUsdt: priceValue,
+        priceNim: priceValue,
         parkingType,
         description: description.trim() || undefined,
         covered,
@@ -324,7 +325,7 @@ export function HostAddScreen() {
         {step === 3 ? (
           <div className="space-y-1.5">
             <label htmlFor="add-price" className={FIELD_LABEL}>
-              Hourly Rate (USDT)
+              Hourly Rate (NIM)
             </label>
             <div className="flex items-center gap-2 rounded-2xl border border-line bg-surface-raised px-4">
               <input
@@ -336,9 +337,10 @@ export function HostAddScreen() {
                 className="min-w-0 flex-1 bg-transparent py-3.5 text-[22px] font-extrabold text-brand outline-none placeholder:text-ink-faint"
               />
               <span className="text-[13px] font-bold text-ink-muted">
-                USDT
+                NIM
               </span>
             </div>
+            <UsdEquivalent nim={priceValue} className="text-[13px] text-ink-muted" />
           </div>
         ) : null}
 
@@ -508,7 +510,7 @@ export function HostAddScreen() {
                     TYPES.find((type) => type.value === parkingType)?.label ??
                     '—',
                 },
-                { label: 'Hourly rate', value: `${price || '0'} USDT` },
+                { label: 'Hourly rate', value: `${price || '0'} NIM` },
                 { label: 'Hours', value: hoursSummary },
                 {
                   label: 'Amenities',

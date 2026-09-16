@@ -6,6 +6,7 @@ import { OfflineNotice } from '@/components/layout/OfflineNotice'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ToastProvider } from '@/components/ui/Toast'
 import { AppModeProvider } from '@/hooks/useAppMode'
+import { NimPriceProvider } from '@/hooks/useNimPrice'
 import { ProfileProvider } from '@/hooks/useProfile'
 import { ThemeProvider } from '@/hooks/useTheme'
 import { WalletProvider } from '@/hooks/useWallet'
@@ -109,11 +110,12 @@ function ScreenFallback() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <AppModeProvider>
-          <WalletProvider>
-            <ProfileProvider>
-              <ToastProvider>
+        <ThemeProvider>
+          <AppModeProvider>
+            <WalletProvider>
+              <NimPriceProvider>
+                <ProfileProvider>
+                  <ToastProvider>
                 <OfflineNotice />
                 {isDevelopmentMode ? (
                   <div className="safe-top sticky top-0 z-50 bg-warning px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-on-ink">
@@ -153,11 +155,12 @@ export default function App() {
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>
-              </ToastProvider>
-            </ProfileProvider>
-          </WalletProvider>
-        </AppModeProvider>
-      </ThemeProvider>
+                  </ToastProvider>
+                </ProfileProvider>
+              </NimPriceProvider>
+            </WalletProvider>
+          </AppModeProvider>
+        </ThemeProvider>
     </ErrorBoundary>
   )
 }

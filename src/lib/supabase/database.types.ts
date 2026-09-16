@@ -114,7 +114,7 @@ export type Database = {
         Row: {
           account_id: string
           amount_raw: number
-          amount_usdt: number
+          amount_nim: number
           created_at: string
           direction: string
           entry_type: string
@@ -126,7 +126,7 @@ export type Database = {
         Insert: {
           account_id: string
           amount_raw: number
-          amount_usdt: number
+          amount_nim: number
           created_at?: string
           direction: string
           entry_type: string
@@ -138,7 +138,7 @@ export type Database = {
         Update: {
           account_id?: string
           amount_raw?: number
-          amount_usdt?: number
+          amount_nim?: number
           created_at?: string
           direction?: string
           entry_type?: string
@@ -299,7 +299,7 @@ export type Database = {
           owner_evm_address: string | null
           parking_type: string | null
           payment_recipient_address: string
-          price_usdt: number
+          price_nim: number
           title: string
           updated_at: string
         }
@@ -318,7 +318,7 @@ export type Database = {
           owner_evm_address?: string | null
           parking_type?: string | null
           payment_recipient_address: string
-          price_usdt: number
+          price_nim: number
           title: string
           updated_at?: string
         }
@@ -337,7 +337,7 @@ export type Database = {
           owner_evm_address?: string | null
           parking_type?: string | null
           payment_recipient_address?: string
-          price_usdt?: number
+          price_nim?: number
           title?: string
           updated_at?: string
         }
@@ -378,7 +378,7 @@ export type Database = {
       payments: {
         Row: {
           amount_raw: number
-          amount_usdt: number
+          amount_nim: number
           block_number: number | null
           chain: string
           confirmed_at: string | null
@@ -390,12 +390,12 @@ export type Database = {
           status: Database["public"]["Enums"]["payment_status"]
           submitted_at: string | null
           token: string
-          token_contract: string
+          token_contract: string | null
           tx_hash: string
         }
         Insert: {
           amount_raw: number
-          amount_usdt: number
+          amount_nim: number
           block_number?: number | null
           chain?: string
           confirmed_at?: string | null
@@ -407,12 +407,12 @@ export type Database = {
           status?: Database["public"]["Enums"]["payment_status"]
           submitted_at?: string | null
           token?: string
-          token_contract: string
+          token_contract: string | null
           tx_hash: string
         }
         Update: {
           amount_raw?: number
-          amount_usdt?: number
+          amount_nim?: number
           block_number?: number | null
           chain?: string
           confirmed_at?: string | null
@@ -424,7 +424,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["payment_status"]
           submitted_at?: string | null
           token?: string
-          token_contract?: string
+          token_contract?: string | null | undefined
           tx_hash?: string
         }
         Relationships: [
@@ -439,7 +439,7 @@ export type Database = {
       }
       payouts: {
         Row: {
-          amount_usdt: number
+          amount_nim: number
           block_number: number | null
           completed_at: string | null
           host_address: string
@@ -450,7 +450,7 @@ export type Database = {
           tx_hash: string | null
         }
         Insert: {
-          amount_usdt: number
+          amount_nim: number
           block_number?: number | null
           completed_at?: string | null
           host_address: string
@@ -461,7 +461,7 @@ export type Database = {
           tx_hash?: string | null
         }
         Update: {
-          amount_usdt?: number
+          amount_nim?: number
           block_number?: number | null
           completed_at?: string | null
           host_address?: string
@@ -526,7 +526,7 @@ export type Database = {
       }
       reservations: {
         Row: {
-          amount_usdt: number
+          amount_nim: number
           created_at: string
           destination_address: string | null
           destination_lat: number | null
@@ -535,8 +535,8 @@ export type Database = {
           end_at: string
           evm_address: string
           expires_at: string | null
-          fee_amount_usdt: number | null
-          host_amount_usdt: number | null
+          fee_amount_nim: number | null
+          host_amount_nim: number | null
           id: string
           nmiq_address: string | null
           parking_space_id: string
@@ -547,7 +547,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          amount_usdt: number
+          amount_nim: number
           created_at?: string
           destination_address?: string | null
           destination_lat?: number | null
@@ -556,8 +556,8 @@ export type Database = {
           end_at: string
           evm_address: string
           expires_at?: string | null
-          fee_amount_usdt?: number | null
-          host_amount_usdt?: number | null
+          fee_amount_nim?: number | null
+          host_amount_nim?: number | null
           id?: string
           nmiq_address?: string | null
           parking_space_id: string
@@ -568,7 +568,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          amount_usdt?: number
+          amount_nim?: number
           created_at?: string
           destination_address?: string | null
           destination_lat?: number | null
@@ -577,8 +577,8 @@ export type Database = {
           end_at?: string
           evm_address?: string
           expires_at?: string | null
-          fee_amount_usdt?: number | null
-          host_amount_usdt?: number | null
+          fee_amount_nim?: number | null
+          host_amount_nim?: number | null
           id?: string
           nmiq_address?: string | null
           parking_space_id?: string
@@ -697,7 +697,7 @@ export type Database = {
           address: string
           latitude: number
           longitude: number
-          price_usdt: number
+          price_nim: number
           payment_recipient_address: string
           parking_type: string | null
           covered: boolean
@@ -717,7 +717,7 @@ export type Database = {
       request_payout: {
         Args: { p_amount: number; p_host: string; p_payout_address: string }
         Returns: {
-          amount_usdt: number
+          amount_nim: number
           id: string
           payout_address: string
           requested_at: string

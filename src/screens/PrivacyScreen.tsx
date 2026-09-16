@@ -28,7 +28,7 @@ const SECTIONS: { title: string; body: string; icon: LucideIcon }[] = [
   },
   {
     title: 'Payments',
-    body: 'Payments are made directly from your wallet to the parking recipient as USDT on Polygon. ParkPilot never holds your funds and never has access to your private keys.',
+    body: 'Payments are made directly from your wallet to the parking recipient as NIM on the Nimiq network. ParkPilot never holds your funds and never has access to your private keys.',
     icon: CreditCard,
   },
   {

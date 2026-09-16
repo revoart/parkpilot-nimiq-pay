@@ -10,39 +10,34 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { UsdtMark } from '@/components/brand/UsdtMark'
+import { NimiqMark } from '@/components/brand/NimiqMark'
 import { DestinationCard } from '@/components/journey'
 import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StateCard } from '@/components/ui/StateCard'
-import { useToast } from '@/components/ui/Toast'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { ChainBadge } from '@/components/wallet/ChainBadge'
 import { ConnectWalletPrompt } from '@/components/wallet/ConnectWalletPrompt'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
 import { trackEvent } from '@/lib/analytics/events'
 import {
-  isUserRejection,
-  userFacingWalletError,
-} from '@/lib/ethereum/errors'
-import { pollUsdtPayment } from '@/lib/payments'
+  isValidNimiqAddress,
+  nimToLuna,
+  sendNimiqPayment,
+} from '@/lib/nimiq'
+import { pollNimPayment } from '@/lib/payments'
 import { getReservation, type ReservationDetails } from '@/lib/reservations'
-import {
-  fromRawAmount,
-  isValidAddress,
-  sendUsdtTransfer,
-  toRawAmount,
-} from '@/lib/usdt'
 import type { Destination } from '@/types'
 import { cn } from '@/utils/cn'
 import { explorerTxUrl } from '@/utils/explorer'
 import { hapticConfirm } from '@/utils/haptics'
 import {
   formatDateLabel,
+  formatNim,
   formatTimeLabel,
-  formatUsdt,
   shortenAddress,
 } from '@/utils/format'
 
@@ -69,22 +64,6 @@ const TRACKER_STEPS = [
   { label: 'On-chain check', active: 'Verifying' },
   { label: 'Receipt', active: 'Receipt' },
 ] as const
-
-/** Well-known EVM chains, so a wrong network is named rather than shown raw. */
-const CHAIN_NAMES: Record<string, string> = {
-  '0x1': 'Ethereum Mainnet',
-  '0x89': 'Polygon',
-  '0xa4b1': 'Arbitrum One',
-  '0x2105': 'Base',
-  '0xa': 'OP Mainnet',
-  '0x38': 'BNB Chain',
-  '0xaa36a7': 'Sepolia',
-}
-
-function chainName(chainId: string | null): string {
-  if (!chainId) return 'Unknown network'
-  return CHAIN_NAMES[chainId.toLowerCase()] ?? chainId
-}
 
 function LifecycleTracker({ phase }: { phase: Phase }) {
   const current = PHASE_STEP[phase]
@@ -209,7 +188,7 @@ const PROCESSING_COPY = {
     subtitle: 'Confirm the transaction in Nimiq Pay to continue.',
   },
   submitted: {
-    title: 'Submitting to Polygon…',
+    title: 'Submitting to the Nimiq network…',
     subtitle: 'Your transaction is being broadcast.',
   },
   verifying: {
@@ -310,7 +289,7 @@ function TransactionProof({
         rel="noreferrer"
         className="flex items-center justify-center gap-1.5 border-t border-line pt-3 text-[13px] font-semibold text-brand underline"
       >
-        View on PolygonScan Explorer
+                View on the Nimiq Explorer
         <ExternalLink className="size-3.5" />
       </a>
     </Card>
@@ -321,7 +300,6 @@ export function PaymentScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const wallet = useWallet()
-  const toast = useToast()
 
   const [details, setDetails] = useState<ReservationDetails | null>(null)
   const [loading, setLoading] = useState(true)
@@ -386,34 +364,15 @@ export function PaymentScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address])
 
-  const amountRaw = useMemo(
-    () =>
-      details
-        ? toRawAmount(String(details.reservation.amount_usdt))
-        : 0n,
+  const amountLuna = useMemo(
+    () => (details ? nimToLuna(String(details.reservation.amount_nim)) : 0n),
     [details],
   )
 
-  const recipient = details?.parkingSpace.payment_recipient_address ?? ''
-  const recipientValid = isValidAddress(recipient)
-
-  const usdtBalanceRaw = useMemo(() => {
-    if (wallet.usdtBalance === null) return null
-    try {
-      return toRawAmount(wallet.usdtBalance)
-    } catch {
-      return null
-    }
-  }, [wallet.usdtBalance])
-
-  const insufficientUsdt =
-    usdtBalanceRaw !== null && usdtBalanceRaw < amountRaw
-  const lowGas = wallet.polBalance !== null && Number(wallet.polBalance) < 0.005
-
-  const shortfall =
-    insufficientUsdt && usdtBalanceRaw !== null
-      ? fromRawAmount(amountRaw - usdtBalanceRaw)
-      : null
+  // NIM goes to the ParkPilot treasury, not the host's own wallet: hosts are
+  // paid out of the treasury so the platform fee can be taken.
+  const recipient = details?.reservation.recipient_address ?? ''
+  const recipientValid = isValidNimiqAddress(recipient)
 
   const processingPhase: 'sending' | 'submitted' | 'verifying' | null =
     phase === 'sending' || phase === 'submitted' || phase === 'verifying'
@@ -425,7 +384,7 @@ export function PaymentScreen() {
     setMessage(null)
 
     if (!recipientValid) {
-      setMessage('The parking recipient address is invalid.')
+      setMessage('The payment address is not configured correctly.')
       setPhase('failed')
       return
     }
@@ -437,10 +396,11 @@ export function PaymentScreen() {
     })
 
     try {
-      const hash = await sendUsdtTransfer({
-        from: wallet.address,
+      // Nimiq Pay picks the fee — Nimiq transactions are free where possible,
+      // so there is no gas token to check for first.
+      const hash = await sendNimiqPayment({
         recipient,
-        amountRaw,
+        value: Number(amountLuna),
       })
       setTxHash(hash)
       setPhase('submitted')
@@ -449,7 +409,7 @@ export function PaymentScreen() {
         metadata: { reservation_id: details.reservation.id, tx_hash: hash },
       })
 
-      const result = await pollUsdtPayment(details.reservation.id, hash, {
+      const result = await pollNimPayment(details.reservation.id, hash, {
         onUpdate: (update) => {
           if (update.status === 'payment_confirmed') {
             setPhase('confirmed')
@@ -472,14 +432,17 @@ export function PaymentScreen() {
       setPhase('failed')
       setMessage(result.reason ?? 'The payment could not be verified.')
     } catch (err) {
-      if (isUserRejection(err)) {
+      // Nimiq Pay reports a declined approval as a permission error, which is a
+      // cancellation rather than a failure — nothing was sent.
+      const text = err instanceof Error ? err.message : ''
+      if (/denied|reject|cancel|permission/i.test(text)) {
         setPhase('review')
         setMessage(
           'Payment cancelled. Your wallet transaction was cancelled and nothing was charged — you can try again.',
         )
       } else {
         setPhase('failed')
-        setMessage(userFacingWalletError(err))
+        setMessage(text || 'The payment could not be completed.')
       }
     }
   }
@@ -492,18 +455,6 @@ export function PaymentScreen() {
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
       // Clipboard is unavailable in insecure contexts; the hash stays visible.
-    }
-  }
-
-  // There is no fiat on-ramp in the mini app, so "add funds" means topping up
-  // the wallet itself: the address is the actionable thing we can hand over.
-  async function copyWalletAddress() {
-    if (!wallet.address) return
-    try {
-      await navigator.clipboard.writeText(wallet.address)
-      toast.show('Address copied — send USDT on Polygon to top up.', 'success')
-    } catch {
-      toast.show('Could not copy the address. Try again.', 'error')
     }
   }
 
@@ -588,14 +539,18 @@ export function PaymentScreen() {
         Total due to solidify slot
       </p>
       <div className="mt-3 flex items-center gap-2.5">
-        <UsdtMark className="size-9" />
+        <NimiqMark className="size-9" />
         <span className="text-[44px] font-extrabold leading-none tracking-[-1.5px]">
-          {formatUsdt(reservation.amount_usdt)}
+          {formatNim(reservation.amount_nim)}
         </span>
         <span className="text-[26px] font-extrabold leading-none text-brand">
-          USDT
+          NIM
         </span>
       </div>
+      <UsdEquivalent
+        nim={reservation.amount_nim}
+        className="mt-2 block text-[13px] font-semibold text-ink-faint"
+      />
       <p className="mt-3 text-[13px] text-ink-muted">{parkingSpace.address}</p>
     </section>
   )
@@ -623,37 +578,11 @@ export function PaymentScreen() {
       <Button full size="lg" onClick={() => navigate(`/pass/${reservation.id}`)}>
         View Parking Pass
       </Button>
-    ) : processingPhase ? null : !wallet.onPolygon ? (
-      <Button
-        full
-        size="lg"
-        variant="danger"
-        className="bg-danger text-white"
-        onClick={() => void wallet.connect()}
-        loading={wallet.status === 'connecting'}
-      >
-        Switch Network
-      </Button>
-    ) : insufficientUsdt ? (
-      <Button
-        full
-        size="lg"
-        variant="warning"
-        className="border-transparent bg-star text-white"
-        onClick={() => void copyWalletAddress()}
-      >
-        Add Funds
-      </Button>
-    ) : (
-      <Button
-        full
-        size="lg"
-        onClick={() => void handlePay()}
-        disabled={insufficientUsdt || !wallet.onPolygon}
-      >
+    ) : processingPhase ? null : (
+      <Button full size="lg" onClick={() => void handlePay()}>
         {phase === 'failed'
           ? 'Try Again'
-          : `Pay ${formatUsdt(reservation.amount_usdt)} USDT`}
+          : `Pay ${formatNim(reservation.amount_nim)} NIM`}
       </Button>
     )
 
@@ -676,7 +605,7 @@ export function PaymentScreen() {
                 Payment Confirmed
               </p>
               <span className="mt-2 inline-flex items-center rounded-full border border-success/40 bg-success-bg px-3 py-1 text-[11px] font-bold uppercase tracking-[0.4px] text-success">
-                {formatUsdt(reservation.amount_usdt)} USDT PAID ON-CHAIN
+                {formatNim(reservation.amount_nim)} NIM PAID ON-CHAIN
               </span>
             </Card>
 
@@ -703,73 +632,10 @@ export function PaymentScreen() {
               />
             ) : null}
           </>
-        ) : !wallet.onPolygon ? (
-          <>
-            <Card className="flex items-center justify-between gap-4">
-              <span className="text-[14px] text-ink-muted">
-                Selected Network
-              </span>
-              <span className="text-[15px] font-bold text-danger">
-                {chainName(wallet.chainId)}
-              </span>
-            </Card>
-
-            <div className="rounded-2xl border border-danger/40 bg-danger-bg p-4">
-              <p className="flex items-center gap-2 text-[15px] font-bold text-danger">
-                <span className="size-2 rounded-full bg-danger" />
-                Wrong Network
-              </p>
-              <p className="mt-2 text-[14px] leading-5 text-danger">
-                Please switch to Polygon network in your wallet to complete
-                this payment.
-              </p>
-            </div>
-
-            <LifecycleTracker phase="review" />
-          </>
-        ) : insufficientUsdt ? (
-          <>
-            <Card className="flex items-center justify-between gap-4">
-              <span className="text-[14px] text-ink-muted">
-                Total Amount Due
-              </span>
-              <span className="text-[15px] font-bold">
-                {formatUsdt(reservation.amount_usdt)} USDT
-              </span>
-            </Card>
-
-            <div className="rounded-2xl border border-warning/40 bg-warning-bg p-4">
-              <p className="flex items-center gap-2 text-[15px] font-bold text-warning">
-                <span className="size-2 rounded-full bg-warning" />
-                Insufficient USDT
-              </p>
-              <p className="mt-2 text-[14px] leading-5 text-warning">
-                You need {formatUsdt(reservation.amount_usdt)} USDT but only
-                have {formatUsdt(wallet.usdtBalance ?? '0')} USDT in your
-                wallet
-                {shortfall ? ` — ${formatUsdt(shortfall)} USDT short.` : '.'}{' '}
-                Add funds to continue.
-              </p>
-            </div>
-
-            <LifecycleTracker phase="review" />
-          </>
         ) : (
           <>
             {amountHero}
             <LifecycleTracker phase={phase} />
-
-            {lowGas ? (
-              <div className="flex items-start gap-2 rounded-2xl bg-warning-bg p-3.5 text-[13px] text-warning">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <span>
-                  <span className="font-semibold">Network fee required.</span>{' '}
-                  Your wallet needs a small amount of POL for the Polygon
-                  network fee. This is not a ParkPilot charge — the parking
-                  price above is the full amount ParkPilot receives.
-                </span>
-              </div>
-            ) : null}
 
             {message ? (
               <div className="flex items-start gap-2 rounded-2xl bg-danger-bg p-3.5 text-[13px] text-danger">
@@ -799,7 +665,8 @@ export function PaymentScreen() {
             <div className="space-y-3 pt-1">
               <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-muted">
                 <ShieldCheck className="size-3.5" />
-                Confirmed in Nimiq Pay. Verified on Polygon before your pass is
+                Confirmed in Nimiq Pay. Verified on the Nimiq network before
+                your pass is
                 issued.
               </p>
             </div>

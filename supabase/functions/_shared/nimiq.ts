@@ -12,7 +12,46 @@
 export const NIMIQ_MAINNET_ID = 24
 export const NIMIQ_TESTNET_ID = 5
 
+/** 1 NIM = 100,000 Luna. NIM has five decimal places. */
+export const LUNA_PER_NIM = 100_000n
+export const NIM_DECIMALS = 5
+
 export const DEFAULT_NIMIQ_RPC_ENDPOINTS = ['https://rpc.nimiqwatch.com']
+
+/** Convert a decimal NIM amount to integer Luna, without floating point. */
+export function nimToLuna(value: string | number | bigint): bigint {
+  if (typeof value === 'bigint') return value * LUNA_PER_NIM
+
+  const text = String(value).trim()
+  if (!/^\d+(\.\d+)?$/.test(text)) {
+    throw new Error(`Invalid NIM amount: ${text}`)
+  }
+
+  const [whole, fraction = ''] = text.split('.')
+  if (/[1-9]/.test(fraction.slice(NIM_DECIMALS))) {
+    throw new Error(
+      `NIM amounts cannot be smaller than one Luna (${NIM_DECIMALS} decimals).`,
+    )
+  }
+
+  const padded = fraction.slice(0, NIM_DECIMALS).padEnd(NIM_DECIMALS, '0')
+  return BigInt(whole) * LUNA_PER_NIM + BigInt(padded)
+}
+
+/** Convert integer Luna to a decimal NIM string. */
+export function lunaToNim(luna: bigint): string {
+  const negative = luna < 0n
+  const absolute = negative ? -luna : luna
+
+  const whole = absolute / LUNA_PER_NIM
+  const fraction = (absolute % LUNA_PER_NIM)
+    .toString()
+    .padStart(NIM_DECIMALS, '0')
+  const trimmed = fraction.replace(/0+$/, '')
+  const result = trimmed ? `${whole}.${trimmed}` : `${whole}`
+
+  return negative ? `-${result}` : result
+}
 
 /** Nimiq's base32 alphabet. I, O, W and Z are not used. */
 const NIMIQ_ALPHABET = '0123456789ABCDEFGHJKLMNPQRSTUVXY'

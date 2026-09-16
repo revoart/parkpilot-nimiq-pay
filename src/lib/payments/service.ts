@@ -6,13 +6,13 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Ask the backend to verify an on-chain USDT payment. */
-export async function verifyUsdtPayment(
+/** Ask the backend to verify a NIM payment on the Nimiq chain. */
+export async function verifyNimPayment(
   reservationId: string,
   txHash: string,
 ): Promise<VerifyPaymentResult> {
   const supabase = getSupabase()
-  const { data, error } = await supabase.functions.invoke('verify-usdt-payment', {
+  const { data, error } = await supabase.functions.invoke('verify-nim-payment', {
     body: { reservation_id: reservationId, tx_hash: txHash },
   })
 
@@ -37,8 +37,12 @@ export interface PollPaymentOptions {
 /**
  * Poll the verifier until the payment is confirmed, fails, or the attempt
  * budget is exhausted. Verification is idempotent server-side.
+ *
+ * A transaction the network has not seen yet comes back as
+ * `payment_submitted`, which keeps the loop going rather than failing — a Nimiq
+ * transaction can sit in the mempool for a while before it is mined.
  */
-export async function pollUsdtPayment(
+export async function pollNimPayment(
   reservationId: string,
   txHash: string,
   options: PollPaymentOptions = {},
@@ -48,7 +52,7 @@ export async function pollUsdtPayment(
   let last: VerifyPaymentResult | null = null
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const result = await verifyUsdtPayment(reservationId, txHash)
+    const result = await verifyNimPayment(reservationId, txHash)
     last = result
     options.onUpdate?.(result)
 

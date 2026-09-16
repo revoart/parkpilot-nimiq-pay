@@ -9,7 +9,7 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { UsdtMark } from '@/components/brand/UsdtMark'
+import { NimiqMark } from '@/components/brand/NimiqMark'
 import {
   DayGrid,
   DurationPicker,
@@ -23,10 +23,12 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StateCard } from '@/components/ui/StateCard'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useDestination } from '@/hooks/useDestination'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
 import { trackEvent } from '@/lib/analytics/events'
+import { listNimiqAccounts } from '@/lib/nimiq'
 import {
   availableDays,
   getAvailability,
@@ -39,7 +41,7 @@ import {
 import { createReservation } from '@/lib/reservations'
 import type { ParkingSpace } from '@/types'
 import { cn } from '@/utils/cn'
-import { formatUsdt } from '@/utils/format'
+import { formatNim } from '@/utils/format'
 
 function toMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number)
@@ -232,7 +234,7 @@ export function ReserveScreen() {
 
   const endTime = fromMinutes(toMinutes(startTime) + durationMinutes)
   const hours = durationMinutes / 60
-  const total = (space?.price_usdt ?? 0) * hours
+  const total = (space?.price_nim ?? 0) * hours
 
   async function handleContinue() {
     setSubmitError(null)
@@ -252,6 +254,23 @@ export function ReserveScreen() {
       return
     }
 
+    // NIM is paid from the driver's Nimiq account, so the reservation records
+    // which address will send it. The server refuses a booking without one —
+    // there would be nothing to verify a payment against.
+    let nmiqAddress: string | null = null
+    try {
+      const accounts = await listNimiqAccounts()
+      nmiqAddress = accounts[0] ?? null
+    } catch {
+      nmiqAddress = null
+    }
+    if (!nmiqAddress) {
+      setSubmitError(
+        'Connect your Nimiq account in Nimiq Pay to pay in NIM.',
+      )
+      return
+    }
+
     const start = new Date(`${date}T${startTime}:00`)
     const end = new Date(start.getTime() + durationMinutes * 60_000)
     if (start.getTime() < Date.now() - 60_000) {
@@ -264,13 +283,14 @@ export function ReserveScreen() {
       const result = await createReservation({
         parkingSpaceId: space.id,
         evmAddress: address,
+        nmiqAddress,
         startAt: start.toISOString(),
         endAt: end.toISOString(),
         destination,
       })
       void trackEvent('reservation_started', {
         evmAddress: address,
-        metadata: { parking_space_id: space.id, amount_usdt: result.amount_usdt },
+        metadata: { parking_space_id: space.id, amount_nim: result.amount_nim },
       })
       // Free listings are already confirmed — no payment step.
       if (result.free) {
@@ -437,8 +457,8 @@ export function ReserveScreen() {
           loading={busy}
           disabled={slots.length === 0}
         >
-          {!busy ? <UsdtMark className="size-4" /> : null}
-          Confirm &amp; Pay {formatUsdt(total)} USDT
+          {!busy ? <NimiqMark className="size-4" /> : null}
+          Confirm &amp; Pay {formatNim(total)} NIM
         </Button>
       }
     >
@@ -497,23 +517,29 @@ export function ReserveScreen() {
             </p>
             <div className="mt-3 flex items-center justify-between py-1.5">
               <span className="text-[14px] text-ink-muted">
-                Hourly rate ({formatUsdt(space.price_usdt)} USDT × {hours})
+                Hourly rate ({formatNim(space.price_nim)} NIM × {hours})
               </span>
               <span className="text-[14px] font-semibold">
-                {formatUsdt(total)} USDT
+                {formatNim(total)} NIM
               </span>
             </div>
             <div className="flex items-center justify-between py-1.5">
               <span className="text-[14px] text-ink-muted">
                 Wallet service fee
               </span>
-              <span className="text-[14px] font-semibold">0.00 USDT</span>
+              <span className="text-[14px] font-semibold">0.00 NIM</span>
             </div>
             <div className="my-2 h-px bg-line" />
             <div className="flex items-center justify-between">
               <span className="text-[15px] font-bold">Total amount</span>
-              <span className="text-[20px] font-extrabold tracking-[-0.3px] text-brand">
-                {formatUsdt(total)} USDT
+              <span className="text-right">
+                <span className="block text-[20px] font-extrabold tracking-[-0.3px] text-brand">
+                  {formatNim(total)} NIM
+                </span>
+                <UsdEquivalent
+                  nim={total}
+                  className="block text-[12px] font-semibold text-ink-faint"
+                />
               </span>
             </div>
           </div>
@@ -529,7 +555,8 @@ export function ReserveScreen() {
           ) : null}
 
           <p className="mt-4 text-center text-xs leading-relaxed text-ink-faint">
-            Free cancellation before arrival. Payment is USDT on Polygon.
+            Free cancellation before arrival. Payment is NIM on the Nimiq
+            network.
           </p>
 
           {submitError ? (

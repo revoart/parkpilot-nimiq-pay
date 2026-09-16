@@ -3,11 +3,17 @@ export function shortenAddress(address: string, size = 4): string {
   return `${address.slice(0, size + 2)}…${address.slice(-size)}`
 }
 
-export function formatUsdt(value: string | number, decimals = 2): string {
+export function formatNim(value: string | number, decimals = 2): string {
   const numeric = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(numeric)) return '0.00'
   return numeric.toFixed(decimals)
 }
+
+/**
+ * @deprecated Use `formatNim`. Kept only for the EVM wallet plumbing that is
+ * still present pending its removal.
+ */
+export const formatUsdt = formatNim
 
 export function formatDistanceKm(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)} m`

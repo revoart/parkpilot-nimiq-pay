@@ -142,7 +142,7 @@ export function SearchScreen() {
       if (typeFilter && space.parking_type !== typeFilter) return false
       if (evOnly && !space.ev_charging) return false
       if (coveredOnly && !space.covered) return false
-      if (maxPrice !== null && Number(space.price_usdt) > maxPrice) return false
+      if (maxPrice !== null && Number(space.price_nim) > maxPrice) return false
       return true
     })
   }, [nearby, query, typeFilter, evOnly, coveredOnly, maxPrice])
@@ -210,14 +210,14 @@ export function SearchScreen() {
     const candidates = results.filter((space) => walkLegs[space.id])
     if (candidates.length < 3) return null
     const maxPrice = Math.max(
-      ...candidates.map((c) => Number(c.price_usdt)),
+      ...candidates.map((c) => Number(c.price_nim)),
     )
     const maxWalk = Math.max(
       ...candidates.map((c) => walkLegs[c.id].durationSeconds),
     )
     let best: { id: string; score: number } | null = null
     for (const space of candidates) {
-      const priceScore = maxPrice > 0 ? Number(space.price_usdt) / maxPrice : 0
+      const priceScore = maxPrice > 0 ? Number(space.price_nim) / maxPrice : 0
       const walkScore =
         maxWalk > 0 ? walkLegs[space.id].durationSeconds / maxWalk : 0
       const score = priceScore * 0.5 + walkScore * 0.5
@@ -568,7 +568,7 @@ export function SearchScreen() {
                   : 'border-line bg-surface-raised text-ink-muted',
               )}
             >
-              Under $5
+              Under 5 NIM
             </button>
           </div>
         ) : null}

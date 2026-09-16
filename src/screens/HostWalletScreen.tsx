@@ -1,7 +1,7 @@
 import { ExternalLink, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
-import { UsdtMark } from '@/components/brand/UsdtMark'
+import { NimiqMark } from '@/components/brand/NimiqMark'
 import { HostShell } from '@/components/layout/HostShell'
 import { BottomSheet } from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/Button'
@@ -9,12 +9,14 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { useToast } from '@/components/ui/Toast'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useWallet } from '@/hooks/useWallet'
 import { getHostWallet, requestPayout, type HostWallet } from '@/lib/host'
+import { isValidNimiqAddress, normalizeNimiqAddress } from '@/lib/nimiq'
 import { cn } from '@/utils/cn'
 import { explorerTxUrl } from '@/utils/explorer'
 import { hapticConfirm } from '@/utils/haptics'
-import { formatDateLabel, formatUsdt, shortenAddress } from '@/utils/format'
+import { formatDateLabel, formatNim, shortenAddress } from '@/utils/format'
 
 const PAYOUT_TONE = {
   requested: 'warning',
@@ -74,22 +76,22 @@ export function HostWalletScreen() {
       setNotice('Enter a valid amount.')
       return
     }
-    if (value < data.min_payout_usdt) {
-      setNotice(`Minimum payout is ${data.min_payout_usdt} USDT.`)
+    if (value < data.min_payout_nim) {
+      setNotice(`Minimum payout is ${data.min_payout_nim} NIM.`)
       return
     }
     if (value > data.available) {
       setNotice('Amount exceeds your available balance.')
       return
     }
-    if (!/^0x[0-9a-fA-F]{40}$/.test(payoutAddress.trim())) {
-      setNotice('Enter a valid payout address.')
+    if (!isValidNimiqAddress(payoutAddress.trim())) {
+      setNotice('Enter a valid Nimiq payout address.')
       return
     }
 
     setSubmitting(true)
     try {
-      await requestPayout(wallet.address, value, payoutAddress.trim())
+      await requestPayout(wallet.address, value, normalizeNimiqAddress(payoutAddress))
       setOpen(false)
       setAmount('')
       setNotice('Withdrawal requested. ParkPilot will process it shortly.')
@@ -133,7 +135,7 @@ export function HostWalletScreen() {
             full
             size="lg"
             variant="accent"
-            disabled={data.available < data.min_payout_usdt}
+            disabled={data.available < data.min_payout_nim}
             onClick={() => {
               setNotice(null)
               setOpen(true)
@@ -172,12 +174,16 @@ export function HostWalletScreen() {
               Available for withdrawal
             </p>
             <div className="flex items-center gap-2">
-              <UsdtMark className="size-9" />
+              <NimiqMark className="size-9" />
               <span className="text-[40px] font-extrabold leading-none tracking-[-1.2px]">
-                {formatUsdt(data.available)}
+                {formatNim(data.available)}
               </span>
-              <span className="text-[18px] font-bold text-brand">USDT</span>
+              <span className="text-[18px] font-bold text-brand">NIM</span>
             </div>
+            <UsdEquivalent
+              nim={data.available}
+              className="text-[13px] text-ink-muted"
+            />
             <p className="text-[13px] text-ink-muted">
               {feePercent}% platform fee applied • Automatically cleared
             </p>
@@ -197,11 +203,15 @@ export function HostWalletScreen() {
                   {stat.label}
                 </p>
                 <p className="mt-1.5 flex items-center gap-1 text-[17px] font-extrabold leading-none tracking-[-0.4px]">
-                  {formatUsdt(stat.value)}
-                  <span aria-hidden="true" className="text-[12px] text-ink">
-                    ₮
+                  {formatNim(stat.value)}
+                  <span className="text-[11px] font-bold text-ink-muted">
+                    NIM
                   </span>
                 </p>
+                <UsdEquivalent
+                  nim={stat.value}
+                  className="mt-1 block text-[10px] text-ink-muted"
+                />
               </div>
             ))}
           </div>
@@ -231,7 +241,7 @@ export function HostWalletScreen() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <p className="text-[16px] font-bold tracking-[-0.3px]">
-                        USDT Withdrawal
+                        NIM Withdrawal
                       </p>
                       <p
                         className={cn(
@@ -244,7 +254,11 @@ export function HostWalletScreen() {
                         )}
                       >
                         {payout.status === 'failed' ? '' : '+'}
-                        {formatUsdt(payout.amount_usdt)} USDT
+                        {formatNim(payout.amount_nim)} NIM
+                        <UsdEquivalent
+                          nim={payout.amount_nim}
+                          className="mt-0.5 block text-[11px] font-medium text-ink-muted"
+                        />
                       </p>
                     </div>
                     <div className="mt-1.5 flex items-center justify-between gap-3">
@@ -284,7 +298,7 @@ export function HostWalletScreen() {
 
       <BottomSheet
         open={open}
-        title="Withdraw USDT"
+        title="Withdraw NIM"
         onClose={() => setOpen(false)}
       >
         <div className="space-y-3">
@@ -293,7 +307,7 @@ export function HostWalletScreen() {
               htmlFor="payout-amount"
               className="text-xs font-semibold text-ink-soft"
             >
-              Amount (USDT)
+              Amount (NIM)
             </label>
             <input
               id="payout-amount"
@@ -305,8 +319,8 @@ export function HostWalletScreen() {
             />
             {data ? (
               <p className="text-[11px] text-ink-muted">
-                Available {formatUsdt(data.available)} USDT · minimum{' '}
-                {data.min_payout_usdt} USDT
+                Available {formatNim(data.available)} NIM · minimum{' '}
+                {data.min_payout_nim} NIM
               </p>
             ) : null}
           </div>
@@ -316,13 +330,13 @@ export function HostWalletScreen() {
               htmlFor="payout-address"
               className="text-xs font-semibold text-ink-soft"
             >
-              Payout address (Polygon)
+              Payout address (Nimiq)
             </label>
             <input
               id="payout-address"
               value={payoutAddress}
               onChange={(event) => setPayoutAddress(event.target.value)}
-              placeholder="0x…"
+              placeholder="NQ…"
               className="w-full rounded-xl bg-surface px-3.5 py-3 font-mono text-[13px] outline-none placeholder:text-ink-faint"
             />
           </div>

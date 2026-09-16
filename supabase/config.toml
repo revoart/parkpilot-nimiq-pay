@@ -14,9 +14,6 @@ major_version = 15
 [functions.create-reservation]
 verify_jwt = false
 
-[functions.verify-usdt-payment]
-verify_jwt = false
-
 [functions.get-reservation]
 verify_jwt = false
 
@@ -93,4 +90,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.fail-payout]
+verify_jwt = false
+
+[functions.nim-price]
+verify_jwt = false
+
+[functions.nim-balance]
+verify_jwt = false
+
+[functions.verify-nim-payment]
 verify_jwt = false

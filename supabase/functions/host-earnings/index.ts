@@ -42,7 +42,7 @@ Deno.serve(async (request) => {
       month: 0,
       allTime: 0,
       series: [] as { date: string; amount: number }[],
-      currency: 'USDT',
+      currency: 'NIM',
     }
 
     const supabase = createClient(
@@ -55,14 +55,14 @@ Deno.serve(async (request) => {
       .select('id')
       .eq('owner_type', 'host')
       .ilike('owner_address', owner)
-      .eq('currency', 'USDT')
+      .eq('currency', 'NIM')
       .maybeSingle()
 
     if (!account) return json(request, empty)
 
     const { data: entries, error } = await supabase
       .from('ledger_entries')
-      .select('entry_type, direction, amount_usdt, created_at')
+      .select('entry_type, direction, amount_nim, created_at')
       .eq('account_id', account.id)
       .eq('entry_type', 'earning')
       .eq('direction', 'credit')
@@ -82,7 +82,7 @@ Deno.serve(async (request) => {
     const dayTotals = new Map<string, number>()
 
     for (const entry of entries ?? []) {
-      const amount = Number(entry.amount_usdt)
+      const amount = Number(entry.amount_nim)
       if (!Number.isFinite(amount)) continue
       const when = new Date(entry.created_at as string).getTime()
 
@@ -116,7 +116,7 @@ Deno.serve(async (request) => {
       month: round(month),
       allTime: round(allTime),
       series,
-      currency: 'USDT',
+      currency: 'NIM',
     })
   } catch (error) {
     console.error('host-earnings failed', error)

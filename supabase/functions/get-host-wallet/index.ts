@@ -43,7 +43,7 @@ Deno.serve(async (request) => {
 
     const { data: payouts } = await supabase
       .from('payouts')
-      .select('id, amount_usdt, status, tx_hash, block_number, requested_at, completed_at, payout_address')
+      .select('id, amount_nim, status, tx_hash, block_number, requested_at, completed_at, payout_address')
       .ilike('host_address', owner)
       .order('requested_at', { ascending: false })
       .limit(20)
@@ -51,7 +51,7 @@ Deno.serve(async (request) => {
     return json(request, {
       ...summary,
       payout_address: wallet?.payout_address ?? null,
-      min_payout_usdt: config.minPayoutUsdt,
+      min_payout_nim: config.minPayoutNim,
       fee_bps: config.feeBps,
       payouts: payouts ?? [],
     })

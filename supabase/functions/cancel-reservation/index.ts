@@ -50,7 +50,7 @@ Deno.serve(async (request) => {
 
     const { data: reservation, error } = await supabase
       .from('reservations')
-      .select('id, evm_address, status, start_at, amount_usdt')
+      .select('id, evm_address, status, start_at, amount_nim')
       .eq('id', body.reservation_id)
       .single()
 
@@ -103,7 +103,7 @@ Deno.serve(async (request) => {
         event_type: 'cancelled_refund_owed',
         payload: {
           reservation_id: reservation.id,
-          amount_usdt: reservation.amount_usdt,
+          amount_nim: reservation.amount_nim,
         },
       })
     }

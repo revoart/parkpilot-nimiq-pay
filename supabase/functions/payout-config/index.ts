@@ -44,9 +44,9 @@ Deno.serve(async (request) => {
       .select('key, value')
       .in('key', [
         'payouts_enabled',
-        'max_payout_usdt',
-        'daily_payout_cap_usdt',
-        'min_payout_usdt',
+        'max_payout_nim',
+        'daily_payout_cap_nim',
+        'min_payout_nim',
       ])
 
     const read = (key: string, fallback: number): number => {
@@ -63,9 +63,9 @@ Deno.serve(async (request) => {
       treasury_address: config.treasuryAddress,
       operator_addresses: config.operatorAddresses,
       payouts_enabled: enabledRow?.value === true,
-      max_payout_usdt: read('max_payout_usdt', 100),
-      daily_payout_cap_usdt: read('daily_payout_cap_usdt', 500),
-      min_payout_usdt: read('min_payout_usdt', 1),
+      max_payout_nim: read('max_payout_nim', 100),
+      daily_payout_cap_nim: read('daily_payout_cap_nim', 500),
+      min_payout_nim: read('min_payout_nim', 1),
       chain_id: Number(Deno.env.get('POLYGON_CHAIN_ID') ?? 137),
       usdt_contract:
         Deno.env.get('USDT_CONTRACT_ADDRESS') ??

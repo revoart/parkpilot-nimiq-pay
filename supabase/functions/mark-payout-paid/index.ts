@@ -1,25 +1,23 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 import { readToken, verifyToken } from '../_shared/auth.ts'
-import {
-  decimalToRaw,
-  findTransfer,
-  normalizeAddress,
-  rawToDecimal,
-  rpc,
-  type RpcReceipt,
-} from '../_shared/evm.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 import {
   ensureAccount,
   getPlatformConfig,
   postLedgerEntry,
 } from '../_shared/ledger.ts'
+import {
+  getNimiqTransaction,
+  isValidNimiqAddress,
+  nimToLuna,
+  normalizeNimiqAddress,
+} from '../_shared/nimiq.ts'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/
-const USDT_DECIMALS = 6
+/** Nimiq hashes are 32 bytes of hex, with no 0x prefix. */
+const TX_HASH_RE = /^(0x)?[0-9a-fA-F]{64}$/
 
 interface Body {
   payout_id?: string
@@ -27,7 +25,7 @@ interface Body {
 }
 
 /**
- * Settles a payout: verifies on-chain that the treasury actually sent USDT to
+ * Settles a payout: verifies on-chain that the treasury actually sent NIM to
  * the host's payout address, then marks it paid and posts the ledger debit.
  *
  * Only the ParkPilot treasury wallet may call this. The transaction hash is
@@ -63,9 +61,14 @@ Deno.serve(async (request) => {
 
     // The treasury address settles directly; when the treasury is a multisig
     // (e.g. a Safe) the caller is a signer, so operators are allow-listed.
-    const callerAddress = normalizeAddress(caller)
+    //
+    // Compared case-insensitively, which is what both EVM and Nimiq addresses
+    // need. Note the caller's identity is still an EVM address until the Nimiq
+    // identity work lands, so a Nimiq treasury will not match here — settlement
+    // is expected to come from an allow-listed operator in that case.
+    const callerAddress = caller.toLowerCase()
     const isTreasury =
-      callerAddress === normalizeAddress(config.treasuryAddress)
+      callerAddress === config.treasuryAddress.toLowerCase()
     const isOperator = config.operatorAddresses.includes(callerAddress)
     if (!isTreasury && !isOperator) {
       return errorResponse(request, 'Not authorized.', 403)
@@ -80,7 +83,7 @@ Deno.serve(async (request) => {
 
     const { data: payout, error } = await supabase
       .from('payouts')
-      .select('id, host_address, payout_address, amount_usdt, status')
+      .select('id, host_address, payout_address, amount_nim, status')
       .eq('id', body.payout_id)
       .single()
 
@@ -98,29 +101,19 @@ Deno.serve(async (request) => {
       )
     }
 
-    const txHash = normalizeAddress(body.tx_hash)
-    const expectedRaw = decimalToRaw(String(payout.amount_usdt), USDT_DECIMALS)
+    const txHash = String(body.tx_hash).replace(/^0x/i, '').toLowerCase()
+    const expectedLuna = nimToLuna(String(payout.amount_nim))
 
-    const rpcUrl =
-      Deno.env.get('POLYGON_RPC_URL') ?? 'https://polygon-rpc.com'
-    const usdtContract =
-      Deno.env.get('USDT_CONTRACT_ADDRESS') ??
-      '0xc2132D05D31c914a87C6611C10748AEb04B58e8F'
+    const transaction = await getNimiqTransaction(txHash)
 
-    const receipt = await rpc<RpcReceipt | null>(
-      rpcUrl,
-      'eth_getTransactionReceipt',
-      [txHash],
-    )
-
-    if (!receipt) {
+    if (!transaction) {
       return errorResponse(
         request,
-        'That transaction is not mined yet. Try again once it is confirmed.',
+        'That transaction is not on the chain yet. Try again once it is mined.',
         409,
       )
     }
-    if (receipt.status !== '0x1') {
+    if (!transaction.executionResult) {
       return errorResponse(
         request,
         'That transaction failed on-chain, so nothing was paid.',
@@ -128,32 +121,43 @@ Deno.serve(async (request) => {
       )
     }
 
-    const transfer = findTransfer(
-      receipt,
-      usdtContract,
-      config.treasuryAddress,
-      payout.payout_address,
-    )
+    const treasury = normalizeNimiqAddress(config.treasuryAddress)
+    const recipient = normalizeNimiqAddress(payout.payout_address)
 
-    if (!transfer) {
+    if (!isValidNimiqAddress(payout.payout_address)) {
       return errorResponse(
         request,
-        `That transaction contains no USDT transfer from the treasury to ${payout.payout_address}.`,
+        'This payout has no valid Nimiq address on file.',
+        409,
+      )
+    }
+
+    if (normalizeNimiqAddress(transaction.from) !== treasury) {
+      return errorResponse(
+        request,
+        'That transaction was not sent from the ParkPilot treasury.',
         400,
       )
     }
 
-    if (transfer.value < expectedRaw) {
+    if (normalizeNimiqAddress(transaction.to) !== recipient) {
       return errorResponse(
         request,
-        `That transaction sent ${rawToDecimal(transfer.value, USDT_DECIMALS)} USDT but this payout is ${String(payout.amount_usdt)} USDT.`,
+        `That transaction did not pay ${payout.payout_address}.`,
         400,
       )
     }
 
-    const blockNumber = receipt.blockNumber
-      ? parseInt(receipt.blockNumber, 16)
-      : null
+    const paidLuna = BigInt(transaction.value)
+    if (paidLuna < expectedLuna) {
+      return errorResponse(
+        request,
+        `That transaction sent ${transaction.value} Luna but this payout is ${String(payout.amount_nim)} NIM.`,
+        400,
+      )
+    }
+
+    const blockNumber = transaction.blockNumber ?? null
     const completedAt = new Date().toISOString()
 
     const { error: updateError } = await supabase
@@ -179,14 +183,14 @@ Deno.serve(async (request) => {
     }
 
     const accountId = await ensureAccount(supabase, 'host', payout.host_address)
-    const amountUsdt = String(payout.amount_usdt)
+    const amountNim = String(payout.amount_nim)
 
     await postLedgerEntry(supabase, {
       accountId,
       entryType: 'payout',
       direction: 'debit',
-      amountUsdt,
-      amountRaw: decimalToRaw(amountUsdt, USDT_DECIMALS),
+      amountNim,
+      amountRaw: nimToLuna(amountNim),
       payoutId: payout.id,
     })
 

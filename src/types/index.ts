@@ -20,7 +20,8 @@ export interface ParkingSpace {
   address: string
   latitude: number
   longitude: number
-  price_usdt: number
+  /** Hourly price in NIM. Shown with a USDT equivalent beside it. */
+  price_nim: number
   payment_recipient_address: string
   parking_type: string | null
   covered: boolean
@@ -77,7 +78,13 @@ export interface Reservation {
   nmiq_address: string | null
   start_at: string
   end_at: string
-  amount_usdt: number
+  /** Total for the booking, in NIM. */
+  amount_nim: number
+  /**
+   * Where the driver sends the NIM — the ParkPilot treasury, not the host.
+   * Hosts are paid out of the treasury so the platform fee can be taken.
+   */
+  recipient_address: string | null
   status: ReservationStatus
   created_at: string
   updated_at: string
@@ -117,11 +124,13 @@ export interface Payment {
   reservation_id: string
   chain: string
   token: string
-  token_contract: string
+  /** Null for native NIM, which has no contract address. */
+  token_contract: string | null
   sender_address: string
   recipient_address: string
+  /** Amount in Luna — the exact on-chain integer. */
   amount_raw: string
-  amount_usdt: number
+  amount_nim: number
   tx_hash: string
   status: PaymentStatus
   submitted_at: string | null
@@ -162,12 +171,15 @@ export interface AppEvent {
 /** Data returned by the create-reservation edge function. */
 export interface CreateReservationResult {
   reservation_id: string
-  amount_usdt: number
-  amount_raw: string
+  /** Amount in NIM, and the same amount as exact Luna. */
+  amount_nim: number
+  amount_luna: string
+  /** The ParkPilot treasury's Nimiq address — where the driver sends NIM. */
   recipient_address: string
-  token_contract: string
-  chain_id: number
-  /** A $0.00 listing is confirmed immediately and skips the payment screen. */
+  /** Nimiq network id (24 on mainnet). */
+  network_id: number
+  luna_per_nim: number
+  /** A 0 NIM listing is confirmed immediately and skips the payment screen. */
   free?: boolean
   status?: ReservationStatus
   destination?: Destination | null

@@ -1,17 +1,24 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 import { readToken, verifyToken } from '../_shared/auth.ts'
-import { decimalToRaw, isValidEvmAddress, rawToDecimal } from '../_shared/evm.ts'
-import { getPlatformConfig, splitRaw } from '../_shared/ledger.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
+import { getPlatformConfig, splitRaw } from '../_shared/ledger.ts'
+import {
+  LUNA_PER_NIM,
+  NIMIQ_MAINNET_ID,
+  isValidNimiqAddress,
+  lunaToNim,
+  nimToLuna,
+  normalizeNimiqAddress,
+} from '../_shared/nimiq.ts'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_HOURS = 24
+const SECONDS_PER_HOUR = 3600n
 
 interface CreateReservationBody {
   parking_space_id?: string
-  evm_address?: string
   nmiq_address?: string | null
   start_at?: string
   end_at?: string
@@ -44,13 +51,19 @@ Deno.serve(async (request) => {
     // request body, so a caller can only book for a wallet they control.
     const authAddress = await verifyToken(readToken(request, body))
     if (!authAddress) {
+      return errorResponse(request, 'Sign in with your wallet to continue.', 401)
+    }
+
+    // The Nimiq account that will actually pay. Required: a NIM payment must
+    // come from a known address, and the verifier checks it against this.
+    if (!isValidNimiqAddress(body.nmiq_address)) {
       return errorResponse(
         request,
-        'Sign in with your wallet to continue.',
-        401,
+        'Connect your Nimiq account to pay in NIM.',
+        400,
       )
     }
-    const evm_address = authAddress
+    const nmiqAddress = normalizeNimiqAddress(body.nmiq_address)
 
     const start = new Date(start_at ?? '')
     const end = new Date(end_at ?? '')
@@ -61,8 +74,10 @@ Deno.serve(async (request) => {
       return errorResponse(request, 'End time must be after start time.')
     }
 
-    const durationHours = (end.getTime() - start.getTime()) / 3_600_000
-    if (durationHours > MAX_HOURS) {
+    const durationSeconds = BigInt(
+      Math.round((end.getTime() - start.getTime()) / 1000),
+    )
+    if (durationSeconds > BigInt(MAX_HOURS * 3600)) {
       return errorResponse(request, 'Reservation cannot exceed 24 hours.')
     }
 
@@ -93,7 +108,7 @@ Deno.serve(async (request) => {
 
     const { data: space, error: spaceError } = await supabase
       .from('parking_spaces')
-      .select('id, price_usdt, payment_recipient_address, active')
+      .select('id, price_nim, payment_recipient_address, active')
       .eq('id', parking_space_id)
       .single()
 
@@ -102,9 +117,6 @@ Deno.serve(async (request) => {
     }
     if (!space.active) {
       return errorResponse(request, 'This parking space is not available.', 409)
-    }
-    if (!isValidEvmAddress(space.payment_recipient_address)) {
-      return errorResponse(request, 'Parking recipient is misconfigured.', 500)
     }
 
     // Release abandoned unpaid reservations so their slots are bookable again.
@@ -121,28 +133,28 @@ Deno.serve(async (request) => {
 
     if (conflictError) throw conflictError
     if (conflicts && conflicts.length > 0) {
-      return errorResponse(
-        request,
-        'This time slot is no longer available.',
-        409,
-      )
+      return errorResponse(request, 'This time slot is no longer available.', 409)
     }
 
     const config = await getPlatformConfig(supabase)
-    if (!isValidEvmAddress(config.treasuryAddress)) {
+    if (!isValidNimiqAddress(config.treasuryAddress)) {
       return errorResponse(request, 'Treasury address is not configured.', 500)
     }
+    const treasury = normalizeNimiqAddress(config.treasuryAddress)
 
-    const hourlyRate = Number(space.price_usdt)
-    const amountUsdt = (hourlyRate * durationHours).toFixed(6)
-    const amountRaw = decimalToRaw(amountUsdt, 6)
+    // Price arrives from Postgres numeric as a string, so this stays exact —
+    // no floating point anywhere near the amount.
+    const hourlyLuna = nimToLuna(String(space.price_nim))
+    const amountRaw = (hourlyLuna * durationSeconds) / SECONDS_PER_HOUR
+
+    const amountNim = lunaToNim(amountRaw)
 
     // Platform fee split (integer math only).
     const { hostRaw, feeRaw } = splitRaw(amountRaw, config.feeBps)
-    const hostAmountUsdt = rawToDecimal(hostRaw, 6)
-    const feeAmountUsdt = rawToDecimal(feeRaw, 6)
+    const hostAmountNim = lunaToNim(hostRaw)
+    const feeAmountNim = lunaToNim(feeRaw)
 
-    // A free listing ($0.00) is confirmed immediately: there is nothing to pay,
+    // A free listing (0 NIM) is confirmed immediately: there is nothing to pay,
     // so it never enters the pending payment window and needs no payment row.
     const isFree = amountRaw === 0n
 
@@ -150,53 +162,48 @@ Deno.serve(async (request) => {
       .from('reservations')
       .insert({
         parking_space_id,
-        evm_address: evm_address.toLowerCase(),
-        nmiq_address: body.nmiq_address ?? null,
+        evm_address: authAddress.toLowerCase(),
+        nmiq_address: nmiqAddress,
         start_at: start.toISOString(),
         end_at: end.toISOString(),
-        amount_usdt: amountUsdt,
+        amount_nim: amountNim,
         status: isFree ? 'reservation_confirmed' : 'reservation_pending',
         expires_at: isFree
           ? null
           : new Date(Date.now() + 15 * 60_000).toISOString(),
-        recipient_address: config.treasuryAddress.toLowerCase(),
-        host_amount_usdt: hostAmountUsdt,
-        fee_amount_usdt: feeAmountUsdt,
+        recipient_address: treasury,
+        host_amount_nim: hostAmountNim,
+        fee_amount_nim: feeAmountNim,
         destination_name: hasDestination ? destinationName : null,
         destination_address: hasDestination ? destinationAddress : null,
         destination_lat: hasDestination ? destinationLat : null,
         destination_lng: hasDestination ? destinationLng : null,
       })
       .select(
-        'id, amount_usdt, start_at, end_at, status, expires_at, recipient_address, host_amount_usdt, fee_amount_usdt, destination_name, destination_address, destination_lat, destination_lng',
+        'id, amount_nim, start_at, end_at, status, expires_at, recipient_address, host_amount_nim, fee_amount_nim, destination_name, destination_address, destination_lat, destination_lng',
       )
       .single()
 
     if (insertError || !reservation) {
       // 23P01 = exclusion_violation (overlapping reservation)
       if (insertError?.code === '23P01') {
-        return errorResponse(
-          request,
-          'This time slot is no longer available.',
-          409,
-        )
+        return errorResponse(request, 'This time slot is no longer available.', 409)
       }
       throw insertError ?? new Error('Failed to create reservation')
     }
 
     return json(request, {
       reservation_id: reservation.id,
-      amount_usdt: Number(reservation.amount_usdt),
-      amount_raw: amountRaw.toString(),
+      amount_nim: Number(reservation.amount_nim),
+      amount_luna: amountRaw.toString(),
       recipient_address: reservation.recipient_address,
-      host_amount_usdt: Number(reservation.host_amount_usdt),
-      fee_amount_usdt: Number(reservation.fee_amount_usdt),
-      host_amount_raw: hostRaw.toString(),
-      fee_amount_raw: feeRaw.toString(),
-      token_contract:
-        Deno.env.get('USDT_CONTRACT_ADDRESS') ??
-        '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
-      chain_id: Number(Deno.env.get('POLYGON_CHAIN_ID') ?? 137),
+      host_amount_nim: Number(reservation.host_amount_nim),
+      fee_amount_nim: Number(reservation.fee_amount_nim),
+      host_amount_luna: hostRaw.toString(),
+      fee_amount_luna: feeRaw.toString(),
+      // Nimiq is the native coin: no token contract, just a network id.
+      network_id: Number(Deno.env.get('NIMIQ_NETWORK_ID') ?? NIMIQ_MAINNET_ID),
+      luna_per_nim: Number(LUNA_PER_NIM),
       start_at: reservation.start_at,
       end_at: reservation.end_at,
       status: reservation.status,

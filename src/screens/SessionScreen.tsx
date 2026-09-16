@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { destinationQueryWith } from '@/hooks/useDestination'
 import { useWalkingRoute } from '@/hooks/useWalkingRoute'
 import { useWallet } from '@/hooks/useWallet'
+import { listNimiqAccounts } from '@/lib/nimiq'
 import {
   canCancel,
   cancelReservation,
@@ -126,9 +127,23 @@ export function SessionScreen() {
     try {
       const start = new Date(details.reservation.end_at)
       const end = new Date(start.getTime() + minutes * 60_000)
+
+      // Reuse the account already on the booking; only ask the wallet if this
+      // reservation predates Nimiq payments.
+      const nmiqAddress =
+        details.reservation.nmiq_address ??
+        (await listNimiqAccounts().catch(() => []))[0] ??
+        null
+      if (!nmiqAddress) {
+        setError('Connect your Nimiq account in Nimiq Pay to pay in NIM.')
+        setExtending(false)
+        return
+      }
+
       const result = await createReservation({
         parkingSpaceId: details.reservation.parking_space_id,
         evmAddress: wallet.address,
+        nmiqAddress,
         startAt: start.toISOString(),
         endAt: end.toISOString(),
       })
@@ -469,7 +484,7 @@ export function SessionScreen() {
               ))}
             </div>
             <p className="text-[13px] text-ink-muted">
-              Extending books the next available slot and is paid in USDT.
+              Extending books the next available slot and is paid in NIM.
             </p>
             <Button
               size="md"

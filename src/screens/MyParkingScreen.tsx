@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { SwipeToDelete } from '@/components/ui/SwipeToDelete'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useWallet } from '@/hooks/useWallet'
 import {
   canCancel,
@@ -21,7 +22,7 @@ import {
   reservationPhase,
   type ReservationSummary,
 } from '@/lib/reservations'
-import { formatDateLabel, formatTimeLabel, formatUsdt } from '@/utils/format'
+import { formatDateLabel, formatTimeLabel, formatNim } from '@/utils/format'
 import { cn } from '@/utils/cn'
 
 type Tab = 'upcoming' | 'active' | 'past'
@@ -250,8 +251,12 @@ export function MyParkingScreen() {
                         >
                           {PHASE_LABEL[phase]}
                         </StatusPill>
-                        <span className="shrink-0 rounded-full bg-brand/10 px-2.5 py-1 text-[12px] font-bold text-brand">
-                          {formatUsdt(item.reservation.amount_usdt)} USDT
+                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-[12px] font-bold text-brand">
+                          {formatNim(item.reservation.amount_nim)} NIM
+                          <UsdEquivalent
+                            nim={item.reservation.amount_nim}
+                            className="text-[10px] font-medium text-ink-muted"
+                          />
                         </span>
                       </div>
                       <div className="flex items-center gap-3">

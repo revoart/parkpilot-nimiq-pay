@@ -9,7 +9,7 @@ interface Body {
 
 interface PaymentRow {
   status: string
-  amount_usdt: number | string
+  amount_nim: number | string
 }
 
 interface ReservationRow {
@@ -59,7 +59,7 @@ Deno.serve(async (request) => {
     const { data: reservations, error: reservationError } = await supabase
       .from('reservations')
       .select(
-        'id, parking_space_id, status, start_at, payments ( status, amount_usdt )',
+        'id, parking_space_id, status, start_at, payments ( status, amount_nim )',
       )
       .in('parking_space_id', ids)
 
@@ -93,7 +93,7 @@ Deno.serve(async (request) => {
           : []
       for (const payment of payments) {
         if (payment.status === 'payment_confirmed') {
-          entry.earned += Number(payment.amount_usdt)
+          entry.earned += Number(payment.amount_nim)
         }
       }
 

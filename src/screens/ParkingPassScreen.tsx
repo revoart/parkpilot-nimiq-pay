@@ -11,7 +11,7 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/layout/AppShell'
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StateCard } from '@/components/ui/StateCard'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { ConnectWalletPrompt } from '@/components/wallet/ConnectWalletPrompt'
 import { destinationQuery, destinationQueryWith } from '@/hooks/useDestination'
 import { useGeolocation } from '@/hooks/useGeolocation'
@@ -36,11 +37,11 @@ import { explorerTxUrl } from '@/utils/explorer'
 import {
   formatDateLabel,
   formatTimeLabel,
-  formatUsdt,
+  formatNim,
   shortenAddress,
 } from '@/utils/format'
 
-function ReceiptRow({ label, value }: { label: string; value: string }) {
+function ReceiptRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4">
       <span className="text-xs text-ink-muted">{label}</span>
@@ -292,7 +293,7 @@ export function ParkingPassScreen() {
               )}
             >
               {confirmed
-                ? `${formatUsdt(reservation.amount_usdt)} USDT PAID ON-CHAIN`
+                ? `${formatNim(reservation.amount_nim)} NIM PAID ON-CHAIN`
                 : 'Awaiting on-chain confirmation'}
             </StatusPill>
           </div>
@@ -352,7 +353,7 @@ export function ParkingPassScreen() {
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-bold">On-chain Proof Verified</p>
               <p className="truncate text-[12px] text-ink-muted">
-                Polygon Tx:{' '}
+                Nimiq Tx:{' '}
                 <span className="font-mono">{shortenAddress(txHash, 4)}</span>
               </p>
             </div>
@@ -360,7 +361,7 @@ export function ParkingPassScreen() {
               href={explorerTxUrl(txHash)}
               target="_blank"
               rel="noreferrer"
-              aria-label="View transaction on PolygonScan"
+              aria-label="View transaction on the Nimiq explorer"
               className="flex size-8 shrink-0 items-center justify-center rounded-xl text-brand"
             >
               <ExternalLink className="size-4" />
@@ -420,9 +421,17 @@ export function ParkingPassScreen() {
             <div id="pass-details" className="space-y-2 px-4 pb-4">
               <ReceiptRow
                 label="Amount"
-                value={`${formatUsdt(reservation.amount_usdt)} USDT`}
+                value={
+                  <>
+                    {formatNim(reservation.amount_nim)} NIM{' '}
+                    <UsdEquivalent
+                      nim={reservation.amount_nim}
+                      className="text-ink-muted"
+                    />
+                  </>
+                }
               />
-              <ReceiptRow label="Network" value="Polygon" />
+              <ReceiptRow label="Network" value="Nimiq" />
               <ReceiptRow
                 label="Sender"
                 value={shortenAddress(reservation.evm_address, 6)}

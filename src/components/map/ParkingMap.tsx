@@ -39,7 +39,7 @@ export function ParkingMap({
     id: space.id,
     lat: space.latitude,
     lng: space.longitude,
-    label: `$${Number(space.price_usdt).toFixed(2)}`,
+    label: `${Number(space.price_nim).toFixed(2)} NIM`,
   }))
 
   return (

@@ -12,7 +12,7 @@ import {
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { UsdtMark } from '@/components/brand/UsdtMark'
+import { NimiqMark } from '@/components/brand/NimiqMark'
 import { AppShell } from '@/components/layout/AppShell'
 import { JourneySummary } from '@/components/journey'
 import { ParkingMap } from '@/components/map/ParkingMap'
@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StateCard } from '@/components/ui/StateCard'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { destinationQuery, useDestination } from '@/hooks/useDestination'
 import { useDrivingRoute } from '@/hooks/useDrivingRoute'
 import { useGeolocation } from '@/hooks/useGeolocation'
@@ -34,7 +35,7 @@ import {
 import { isSaved, toggleSaved } from '@/lib/saved'
 import type { ParkingSpace } from '@/types'
 import { cn } from '@/utils/cn'
-import { formatUsdt } from '@/utils/format'
+import { formatNim } from '@/utils/format'
 
 function reviewDate(value: string): string {
   return new Date(value).toLocaleDateString(undefined, {
@@ -349,10 +350,14 @@ export function ParkingDetailScreen() {
               </div>
 
               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand/30 bg-brand/8 py-1.5 pl-2 pr-3">
-                <UsdtMark className="size-5" />
+                <NimiqMark className="size-5" />
                 <span className="text-[14px] font-bold leading-none tracking-[-0.2px]">
-                  {formatUsdt(space.price_usdt)}/hr USDT
+                  {formatNim(space.price_nim)}/hr NIM
                 </span>
+                <UsdEquivalent
+                  nim={space.price_nim}
+                  className="text-[12px] font-medium text-ink-muted"
+                />
               </span>
             </div>
 
@@ -430,7 +435,7 @@ export function ParkingDetailScreen() {
               <p className="text-[15px] font-bold">About this parking</p>
               <p className="mt-1.5 text-[14px] leading-5 text-ink-muted">
                 {space.description ??
-                  'Reserve in advance and pay with USDT through Nimiq Pay. Your parking pass appears in Bookings once payment is confirmed on-chain.'}
+                  'Reserve in advance and pay with NIM through Nimiq Pay. Your parking pass appears in Bookings once payment is confirmed on-chain.'}
               </p>
             </div>
 

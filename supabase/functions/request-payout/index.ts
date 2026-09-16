@@ -5,7 +5,7 @@ import { isValidEvmAddress } from '../_shared/evm.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
-  amount_usdt?: number | string
+  amount_nim?: number | string
   payout_address?: string
 }
 
@@ -40,7 +40,7 @@ Deno.serve(async (request) => {
       return errorResponse(request, 'Invalid payout address.')
     }
 
-    const amount = Number(body.amount_usdt)
+    const amount = Number(body.amount_nim)
     if (!Number.isFinite(amount) || amount <= 0) {
       return errorResponse(request, 'Enter a valid amount.')
     }

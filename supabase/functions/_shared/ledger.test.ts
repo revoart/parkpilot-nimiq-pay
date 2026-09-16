@@ -2,30 +2,30 @@ import { describe, expect, it } from 'vitest'
 
 import { splitRaw } from './ledger'
 
-const ONE_USDT = 1_000_000n
+const ONE_UNIT = 1_000_000n
 
 describe('splitRaw', () => {
   it('splits a 10% platform fee', () => {
-    const { hostRaw, feeRaw } = splitRaw(100n * ONE_USDT, 1000)
-    expect(feeRaw).toBe(10n * ONE_USDT)
-    expect(hostRaw).toBe(90n * ONE_USDT)
+    const { hostRaw, feeRaw } = splitRaw(100n * ONE_UNIT, 1000)
+    expect(feeRaw).toBe(10n * ONE_UNIT)
+    expect(hostRaw).toBe(90n * ONE_UNIT)
   })
 
   it('takes no fee when the rate is zero', () => {
-    const { hostRaw, feeRaw } = splitRaw(42n * ONE_USDT, 0)
+    const { hostRaw, feeRaw } = splitRaw(42n * ONE_UNIT, 0)
     expect(feeRaw).toBe(0n)
-    expect(hostRaw).toBe(42n * ONE_USDT)
+    expect(hostRaw).toBe(42n * ONE_UNIT)
   })
 
   it('gives the whole amount to the platform at 100%', () => {
-    const { hostRaw, feeRaw } = splitRaw(7n * ONE_USDT, 10_000)
-    expect(feeRaw).toBe(7n * ONE_USDT)
+    const { hostRaw, feeRaw } = splitRaw(7n * ONE_UNIT, 10_000)
+    expect(feeRaw).toBe(7n * ONE_UNIT)
     expect(hostRaw).toBe(0n)
   })
 
   it('never lets the fee exceed the gross amount', () => {
-    const { hostRaw, feeRaw } = splitRaw(5n * ONE_USDT, 20_000)
-    expect(feeRaw).toBe(5n * ONE_USDT)
+    const { hostRaw, feeRaw } = splitRaw(5n * ONE_UNIT, 20_000)
+    expect(feeRaw).toBe(5n * ONE_UNIT)
     expect(hostRaw).toBe(0n)
   })
 
@@ -37,19 +37,19 @@ describe('splitRaw', () => {
   })
 
   it('treats a negative rate as no fee', () => {
-    const { hostRaw, feeRaw } = splitRaw(9n * ONE_USDT, -500)
+    const { hostRaw, feeRaw } = splitRaw(9n * ONE_UNIT, -500)
     expect(feeRaw).toBe(0n)
-    expect(hostRaw).toBe(9n * ONE_USDT)
+    expect(hostRaw).toBe(9n * ONE_UNIT)
   })
 
   it('rounds a fractional rate to the nearest basis point', () => {
-    const { feeRaw } = splitRaw(100n * ONE_USDT, 1000.4)
-    expect(feeRaw).toBe(10n * ONE_USDT)
+    const { feeRaw } = splitRaw(100n * ONE_UNIT, 1000.4)
+    expect(feeRaw).toBe(10n * ONE_UNIT)
   })
 
   it('conserves value for a range of amounts and rates', () => {
     const rates = [0, 1, 250, 1000, 2500, 9999]
-    const amounts = [1n, 999n, ONE_USDT, 99_990_400n, 123_456_789n]
+    const amounts = [1n, 999n, ONE_UNIT, 99_990_400n, 123_456_789n]
 
     for (const rate of rates) {
       for (const gross of amounts) {

@@ -3,13 +3,14 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 export interface PlatformConfig {
   feeBps: number
   treasuryAddress: string
-  minPayoutUsdt: number
+  minPayoutNim: number
   /** Wallets allowed to settle payouts (signers, when the treasury is a multisig). */
   operatorAddresses: string[]
 }
 
 const DEFAULT_FEE_BPS = 1000
-const DEFAULT_MIN_PAYOUT = 1
+/** Matches the `min_payout_nim` row in migration 0022. */
+const DEFAULT_MIN_PAYOUT = 5000
 
 /** Platform fee + treasury + payout floor, read from platform_settings. */
 export async function getPlatformConfig(
@@ -22,8 +23,8 @@ export async function getPlatformConfig(
 
   const feeBps = Number(map.get('platform_fee_bps') ?? DEFAULT_FEE_BPS)
   const treasuryAddress = String(map.get('treasury_address') ?? '')
-  const minPayoutUsdt = Number(
-    map.get('min_payout_usdt') ?? DEFAULT_MIN_PAYOUT,
+  const minPayoutNim = Number(
+    map.get('min_payout_nim') ?? DEFAULT_MIN_PAYOUT,
   )
 
   const rawOperators = map.get('operator_addresses')
@@ -36,8 +37,8 @@ export async function getPlatformConfig(
   return {
     feeBps: Number.isFinite(feeBps) ? feeBps : DEFAULT_FEE_BPS,
     treasuryAddress,
-    minPayoutUsdt: Number.isFinite(minPayoutUsdt)
-      ? minPayoutUsdt
+    minPayoutNim: Number.isFinite(minPayoutNim)
+      ? minPayoutNim
       : DEFAULT_MIN_PAYOUT,
     operatorAddresses,
   }
@@ -75,14 +76,14 @@ export async function ensureAccount(
     .select('id')
     .eq('owner_type', ownerType)
     .ilike('owner_address', address)
-    .eq('currency', 'USDT')
+    .eq('currency', 'NIM')
     .maybeSingle()
 
   if (existing) return existing.id as string
 
   const { data, error } = await supabase
     .from('ledger_accounts')
-    .insert({ owner_type: ownerType, owner_address: address, currency: 'USDT' })
+    .insert({ owner_type: ownerType, owner_address: address, currency: 'NIM' })
     .select('id')
     .single()
 
@@ -94,7 +95,7 @@ export async function ensureAccount(
         .select('id')
         .eq('owner_type', ownerType)
         .ilike('owner_address', address)
-        .eq('currency', 'USDT')
+        .eq('currency', 'NIM')
         .maybeSingle()
       if (raced) return raced.id as string
     }
@@ -108,7 +109,7 @@ export interface LedgerPosting {
   accountId: string
   entryType: 'earning' | 'fee' | 'payout' | 'refund' | 'adjustment'
   direction: 'credit' | 'debit'
-  amountUsdt: string
+  amountNim: string
   amountRaw: bigint
   reservationId?: string | null
   paymentId?: string | null
@@ -130,7 +131,7 @@ export async function postLedgerEntry(
     payout_id: posting.payoutId ?? null,
     entry_type: posting.entryType,
     direction: posting.direction,
-    amount_usdt: posting.amountUsdt,
+    amount_nim: posting.amountNim,
     amount_raw: posting.amountRaw.toString(),
   })
 
@@ -143,9 +144,9 @@ export interface CreditPaymentInput {
   treasuryAddress: string
   reservationId: string
   paymentId: string
-  hostAmountUsdt: string
+  hostAmountNim: string
   hostAmountRaw: bigint
-  feeAmountUsdt: string
+  feeAmountNim: string
   feeAmountRaw: bigint
 }
 
@@ -163,7 +164,7 @@ export async function creditPayment(
     accountId: hostAccount,
     entryType: 'earning',
     direction: 'credit',
-    amountUsdt: input.hostAmountUsdt,
+    amountNim: input.hostAmountNim,
     amountRaw: input.hostAmountRaw,
     reservationId: input.reservationId,
     paymentId: input.paymentId,
@@ -179,7 +180,7 @@ export async function creditPayment(
       accountId: treasuryAccount,
       entryType: 'fee',
       direction: 'credit',
-      amountUsdt: input.feeAmountUsdt,
+      amountNim: input.feeAmountNim,
       amountRaw: input.feeAmountRaw,
       reservationId: input.reservationId,
       paymentId: input.paymentId,
@@ -206,7 +207,7 @@ export async function getHostWalletSummary(
     .select('id')
     .eq('owner_type', 'host')
     .ilike('owner_address', address)
-    .eq('currency', 'USDT')
+    .eq('currency', 'NIM')
     .maybeSingle()
 
   let totalEarned = 0
@@ -215,11 +216,11 @@ export async function getHostWalletSummary(
   if (account) {
     const { data: entries } = await supabase
       .from('ledger_entries')
-      .select('entry_type, direction, amount_usdt')
+      .select('entry_type, direction, amount_nim')
       .eq('account_id', account.id)
 
     for (const entry of entries ?? []) {
-      const amount = Number(entry.amount_usdt)
+      const amount = Number(entry.amount_nim)
       if (!Number.isFinite(amount)) continue
       if (entry.entry_type === 'earning' && entry.direction === 'credit') {
         totalEarned += amount
@@ -232,12 +233,12 @@ export async function getHostWalletSummary(
 
   const { data: inFlight } = await supabase
     .from('payouts')
-    .select('amount_usdt')
+    .select('amount_nim')
     .ilike('host_address', address)
     .eq('status', 'requested')
 
   const reserved = (inFlight ?? []).reduce(
-    (sum, row) => sum + Number(row.amount_usdt ?? 0),
+    (sum, row) => sum + Number(row.amount_nim ?? 0),
     0,
   )
 
@@ -252,12 +253,12 @@ export async function getHostWalletSummary(
   if (spaceIds.length > 0) {
     const { data: reservations } = await supabase
       .from('reservations')
-      .select('host_amount_usdt')
+      .select('host_amount_nim')
       .in('parking_space_id', spaceIds)
       .eq('status', 'reservation_pending')
 
     pending = (reservations ?? []).reduce(
-      (sum, row) => sum + Number(row.host_amount_usdt ?? 0),
+      (sum, row) => sum + Number(row.host_amount_nim ?? 0),
       0,
     )
   }

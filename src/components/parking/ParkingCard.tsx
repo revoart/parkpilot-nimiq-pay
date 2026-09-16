@@ -1,14 +1,15 @@
 import { Bookmark, MapPin, Star } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
-import { UsdtMark } from '@/components/brand/UsdtMark'
+import { NimiqMark } from '@/components/brand/NimiqMark'
 import { ListingPhoto } from '@/components/parking/ListingPhoto'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { parkingTypeLabel } from '@/lib/parking'
 import { isSaved, toggleSaved } from '@/lib/saved'
 import type { ParkingSpace } from '@/types'
 import { cn } from '@/utils/cn'
-import { formatDistanceKm, formatUsdt } from '@/utils/format'
+import { formatDistanceKm, formatNim } from '@/utils/format'
 
 /**
  * Cards are rendered both from the radius search (which carries rating
@@ -40,7 +41,8 @@ interface ParkingCardProps {
 }
 
 /**
- * Price pill from the Figma card — USDT mark plus amount on a tinted capsule.
+ * Price pill from the Figma card — NIM mark plus amount on a tinted capsule,
+ * with the live USDT equivalent alongside it.
  */
 function PricePill({ price, className }: { price: number; className?: string }) {
   return (
@@ -50,10 +52,11 @@ function PricePill({ price, className }: { price: number; className?: string }) 
         className,
       )}
     >
-      <UsdtMark className="size-4" />
+      <NimiqMark className="size-4" />
       <span className="text-[12px] font-bold leading-none tracking-[-0.2px]">
-        {formatUsdt(price)} USDT
+        {formatNim(price)} NIM
       </span>
+      <UsdEquivalent nim={price} className="text-[10px] font-medium text-ink-muted" />
     </span>
   )
 }
@@ -103,11 +106,15 @@ export function ParkingCard({
             <p className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-[-0.2px]">
               {space.title}
             </p>
-            <p className="shrink-0 text-[15px] font-bold leading-none tracking-[-0.3px]">
-              {formatUsdt(space.price_usdt)}
+            <p className="shrink-0 text-right text-[15px] font-bold leading-none tracking-[-0.3px]">
+              {formatNim(space.price_nim)}
               <span className="ml-0.5 text-[10px] font-medium text-ink-muted">
                 /hr
               </span>
+              <UsdEquivalent
+                nim={space.price_nim}
+                className="mt-0.5 block text-[10px] font-medium text-ink-muted"
+              />
             </p>
           </div>
 
@@ -203,7 +210,7 @@ export function ParkingCard({
                 ? `Distance: ${formatDistanceKm(distanceKm)}`
                 : space.address}
             </span>
-            <PricePill price={space.price_usdt} className="shrink-0" />
+            <PricePill price={space.price_nim} className="shrink-0" />
           </div>
         </div>
       </div>

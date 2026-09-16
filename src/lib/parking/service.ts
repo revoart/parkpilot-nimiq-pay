@@ -6,7 +6,7 @@ import type { LatLng } from '@/utils/geo'
 type ParkingSpaceRow = Database['public']['Tables']['parking_spaces']['Row']
 
 function normalize(row: ParkingSpaceRow): ParkingSpace {
-  return { ...row, price_usdt: Number(row.price_usdt) }
+  return { ...row, price_nim: Number(row.price_nim) }
 }
 
 /** The discovery radius. Widening is an explicit driver action, never silent. */
@@ -37,7 +37,7 @@ export async function listNearbyParking(
 
   return (data ?? []).map((row) => ({
     ...row,
-    price_usdt: Number(row.price_usdt),
+    price_nim: Number(row.price_nim),
     distance_m: Number(row.distance_m),
     rating_avg: row.rating_avg === null ? null : Number(row.rating_avg),
     rating_count: Number(row.rating_count ?? 0),
@@ -56,7 +56,7 @@ export async function listParkingSpaces(
     .from('parking_spaces')
     .select('*')
     .eq('active', true)
-    .order('price_usdt', { ascending: true })
+    .order('price_nim', { ascending: true })
     .limit(100)
 
   if (error) throw new Error(error.message)

@@ -21,7 +21,7 @@ export interface HostBooking {
   parkingSpaceImageUrl: string | null
   startAt: string
   endAt: string
-  amountUsdt: number
+  amountNim: number
   status: ReservationStatus
   createdAt: string
   paymentStatus: PaymentStatus | null
@@ -44,7 +44,7 @@ export interface CreateSpaceInput {
   address: string
   latitude: number
   longitude: number
-  priceUsdt: number
+  priceNim: number
   parkingType: string
   description?: string
   covered?: boolean
@@ -59,7 +59,7 @@ export interface UpdateSpaceInput {
   id: string
   title?: string
   address?: string
-  priceUsdt?: number
+  priceNim?: number
   parkingType?: string
   description?: string | null
   covered?: boolean
@@ -78,7 +78,7 @@ function normalizeSpace(row: Record<string, unknown>): ParkingSpace {
     address: String(row.address),
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
-    price_usdt: Number(row.price_usdt),
+    price_nim: Number(row.price_nim),
     payment_recipient_address: String(row.payment_recipient_address ?? ''),
     parking_type: (row.parking_type as string | null) ?? null,
     covered: Boolean(row.covered),
@@ -197,7 +197,7 @@ export async function listHostBookings(evmAddress: string): Promise<HostBooking[
       parkingSpaceImageUrl: (space?.image_url as string | null) ?? null,
       startAt: String(row.start_at),
       endAt: String(row.end_at),
-      amountUsdt: Number(row.amount_usdt),
+      amountNim: Number(row.amount_nim),
       status: row.status as ReservationStatus,
       createdAt: String(row.created_at ?? ''),
       paymentStatus: (payment?.status as PaymentStatus) ?? null,
@@ -231,13 +231,13 @@ export async function getHostEarnings(evmAddress: string): Promise<HostEarnings>
     month: Number(payload.month ?? 0),
     allTime: Number(payload.allTime ?? 0),
     series: payload.series ?? [],
-    currency: payload.currency ?? 'USDT',
+    currency: payload.currency ?? 'NIM',
   }
 }
 
 export interface HostPayout {
   id: string
-  amount_usdt: number
+  amount_nim: number
   status: 'requested' | 'processing' | 'paid' | 'failed'
   tx_hash: string | null
   block_number: number | null
@@ -252,7 +252,7 @@ export interface HostWallet {
   totalEarned: number
   totalWithdrawn: number
   payout_address: string | null
-  min_payout_usdt: number
+  min_payout_nim: number
   fee_bps: number
   payouts: HostPayout[]
 }
@@ -281,25 +281,25 @@ export async function getHostWallet(evmAddress: string): Promise<HostWallet> {
     totalEarned: Number(payload.totalEarned ?? 0),
     totalWithdrawn: Number(payload.totalWithdrawn ?? 0),
     payout_address: payload.payout_address ?? null,
-    min_payout_usdt: Number(payload.min_payout_usdt ?? 1),
+    min_payout_nim: Number(payload.min_payout_nim ?? 1),
     fee_bps: Number(payload.fee_bps ?? 0),
     payouts: (payload.payouts ?? []).map((payout) => ({
       ...payout,
-      amount_usdt: Number(payout.amount_usdt ?? 0),
+      amount_nim: Number(payout.amount_nim ?? 0),
     })),
   }
 }
 
 export async function requestPayout(
   evmAddress: string,
-  amountUsdt: number,
+  amountNim: number,
   payoutAddress: string,
 ): Promise<void> {
   const supabase = getSupabase()
   const authToken = await requireToken(evmAddress)
   const { data, error } = await supabase.functions.invoke('request-payout', {
     body: {
-      amount_usdt: amountUsdt,
+      amount_nim: amountNim,
       payout_address: payoutAddress,
       auth_token: authToken,
     },
@@ -332,7 +332,7 @@ export async function createParkingSpace(
         address: input.address,
         latitude: input.latitude,
         longitude: input.longitude,
-        price_usdt: input.priceUsdt,
+        price_nim: input.priceNim,
         parking_type: input.parkingType,
         description: input.description ?? null,
         covered: input.covered ?? false,
@@ -367,7 +367,7 @@ export async function updateParkingSpace(
   }
   if (input.title !== undefined) body.title = input.title
   if (input.address !== undefined) body.address = input.address
-  if (input.priceUsdt !== undefined) body.price_usdt = input.priceUsdt
+  if (input.priceNim !== undefined) body.price_nim = input.priceNim
   if (input.parkingType !== undefined) body.parking_type = input.parkingType
   if (input.description !== undefined) body.description = input.description
   if (input.covered !== undefined) body.covered = input.covered

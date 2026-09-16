@@ -13,7 +13,11 @@ import type {
 export interface CreateReservationInput {
   parkingSpaceId: string
   evmAddress: string
-  nmiqAddress?: string | null
+  /**
+   * The Nimiq account that will pay. Required — the server refuses to create a
+   * reservation it cannot match a NIM payment against.
+   */
+  nmiqAddress: string
   startAt: string
   endAt: string
   /** The place the driver is heading to — persisted with the reservation. */
@@ -26,13 +30,13 @@ export interface ReservationDetails {
   payment: Payment | null
 }
 
-interface RawReservation extends Omit<Reservation, 'amount_usdt'> {
-  amount_usdt: number | string
+interface RawReservation extends Omit<Reservation, 'amount_nim'> {
+  amount_nim: number | string
   parking_spaces: Record<string, unknown> | Record<string, unknown>[]
 }
 
-interface RawPayment extends Omit<Payment, 'amount_usdt'> {
-  amount_usdt: number | string
+interface RawPayment extends Omit<Payment, 'amount_nim'> {
+  amount_nim: number | string
 }
 
 export async function createReservation(
@@ -82,7 +86,7 @@ interface RawSummary {
   nmiq_address: string | null
   start_at: string
   end_at: string
-  amount_usdt: number | string
+  amount_nim: number | string
   status: Reservation['status']
   created_at: string
   updated_at: string
@@ -102,7 +106,7 @@ function toParkingSpace(space: Record<string, unknown>): ParkingSpace {
     address: String(space.address),
     latitude: Number(space.latitude),
     longitude: Number(space.longitude),
-    price_usdt: 0,
+    price_nim: 0,
     payment_recipient_address: '',
     parking_type: (space.parking_type as string | null) ?? null,
     covered: Boolean(space.covered),
@@ -152,7 +156,9 @@ export async function listReservations(
         nmiq_address: row.nmiq_address,
         start_at: row.start_at,
         end_at: row.end_at,
-        amount_usdt: Number(row.amount_usdt),
+        amount_nim: Number(row.amount_nim),
+        // Not selected by the list query — only the payment screen needs it.
+        recipient_address: null,
         status: row.status,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -165,7 +171,7 @@ export async function listReservations(
       payment: embeddedPayment
         ? {
             ...(embeddedPayment as RawPayment),
-            amount_usdt: Number((embeddedPayment as RawPayment).amount_usdt ?? 0),
+            amount_nim: Number((embeddedPayment as RawPayment).amount_nim ?? 0),
           }
         : null,
     }
@@ -247,7 +253,7 @@ export async function getReservation(
     address: String(space.address),
     latitude: Number(space.latitude),
     longitude: Number(space.longitude),
-    price_usdt: Number(space.price_usdt),
+    price_nim: Number(space.price_nim),
     payment_recipient_address: String(space.payment_recipient_address ?? ''),
     parking_type: (space.parking_type as string | null) ?? null,
     covered: Boolean(space.covered),
@@ -262,11 +268,11 @@ export async function getReservation(
   return {
     reservation: {
       ...payload.reservation,
-      amount_usdt: Number(payload.reservation.amount_usdt),
+      amount_nim: Number(payload.reservation.amount_nim),
     },
     parkingSpace,
     payment: payload.payment
-      ? { ...payload.payment, amount_usdt: Number(payload.payment.amount_usdt) }
+      ? { ...payload.payment, amount_nim: Number(payload.payment.amount_nim) }
       : null,
   }
 }

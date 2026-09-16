@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { useToast } from '@/components/ui/Toast'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { Toggle } from '@/components/ui/Toggle'
 import { useWallet } from '@/hooks/useWallet'
 import {
@@ -21,7 +22,7 @@ import {
   type HostSpace,
 } from '@/lib/host'
 import { cn } from '@/utils/cn'
-import { formatUsdt } from '@/utils/format'
+import { formatNim } from '@/utils/format'
 
 const FIELD_LABEL =
   'text-[11px] font-bold uppercase tracking-[0.8px] text-ink-faint'
@@ -108,7 +109,7 @@ export function HostSpaceScreen() {
       if (found) {
         setTitle(found.title)
         setAddress(found.address)
-        setPrice(String(found.price_usdt))
+        setPrice(String(found.price_nim))
         setParkingType(found.parking_type ?? 'garage')
         setDescription(found.description ?? '')
         setCovered(found.covered)
@@ -157,7 +158,7 @@ export function HostSpaceScreen() {
         id: space.id,
         title: title.trim(),
         address: address.trim(),
-        priceUsdt: priceValue,
+        priceNim: priceValue,
         parkingType,
         description: description.trim() || null,
         covered,
@@ -310,7 +311,11 @@ export function HostSpaceScreen() {
               {address || space.address}
             </p>
             <p className="mt-0.5 text-[14px] font-bold text-brand">
-              {formatUsdt(price || space.price_usdt)} USDT/hr
+              {formatNim(price || space.price_nim)} NIM/hr{' '}
+              <UsdEquivalent
+                nim={price || space.price_nim}
+                className="text-[12px] font-medium text-ink-muted"
+              />
             </p>
           </div>
         </Card>
@@ -388,7 +393,7 @@ export function HostSpaceScreen() {
           </div>
           <div className="space-y-1.5">
             <label htmlFor="space-price" className={FIELD_LABEL}>
-              Price (USDT per hour)
+              Price (NIM per hour)
             </label>
             <input
               id="space-price"

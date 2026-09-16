@@ -11,7 +11,7 @@ interface Body {
   address?: string
   latitude?: number
   longitude?: number
-  price_usdt?: number | string
+  price_nim?: number | string
   parking_type?: string
   description?: string | null
   covered?: boolean
@@ -48,7 +48,7 @@ Deno.serve(async (request) => {
       return errorResponse(request, 'Invalid longitude.')
     }
 
-    const price = Number(body.price_usdt)
+    const price = Number(body.price_nim)
     if (!Number.isFinite(price) || price <= 0 || price > 100000) {
       return errorResponse(request, 'Price must be greater than 0.')
     }
@@ -89,7 +89,7 @@ Deno.serve(async (request) => {
         address,
         latitude,
         longitude,
-        price_usdt: price.toFixed(6),
+        price_nim: price.toFixed(6),
         description: body.description?.trim() || null,
         payment_recipient_address: owner,
         owner_evm_address: owner,

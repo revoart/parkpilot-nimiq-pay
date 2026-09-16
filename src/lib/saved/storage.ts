@@ -9,7 +9,7 @@ export type SavedParking = Pick<
   | 'address'
   | 'latitude'
   | 'longitude'
-  | 'price_usdt'
+  | 'price_nim'
   | 'parking_type'
   | 'covered'
   | 'ev_charging'
@@ -59,7 +59,7 @@ export function toggleSaved(space: ParkingSpace): boolean {
     address: space.address,
     latitude: space.latitude,
     longitude: space.longitude,
-    price_usdt: space.price_usdt,
+    price_nim: space.price_nim,
     parking_type: space.parking_type,
     covered: space.covered,
     ev_charging: space.ev_charging,

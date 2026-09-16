@@ -2,16 +2,17 @@ import { CalendarCheck, MessageSquare } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { UsdtMark } from '@/components/brand/UsdtMark'
+import { NimiqMark } from '@/components/brand/NimiqMark'
 import { HostShell } from '@/components/layout/HostShell'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill, type PillTone } from '@/components/ui/StatusPill'
+import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useWallet } from '@/hooks/useWallet'
 import { listHostBookings, type HostBooking } from '@/lib/host'
 import type { ReservationStatus } from '@/types'
-import { formatDateLabel, formatTimeLabel, formatUsdt, shortenAddress } from '@/utils/format'
+import { formatDateLabel, formatTimeLabel, formatNim, shortenAddress } from '@/utils/format'
 import { cn } from '@/utils/cn'
 
 type Tab = 'upcoming' | 'past'
@@ -204,8 +205,12 @@ export function HostBookingsScreen() {
                       {cleared ? 'Earnings (On-Chain cleared)' : 'Earnings'}
                     </span>
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-[13px] font-bold text-brand">
-                      <UsdtMark className="size-3.5" />
-                      {formatUsdt(booking.amountUsdt)} USDT
+                      <NimiqMark className="size-3.5" />
+                      {formatNim(booking.amountNim)} NIM
+                      <UsdEquivalent
+                        nim={booking.amountNim}
+                        className="text-[11px] font-medium text-ink-muted"
+                      />
                     </span>
                   </div>
                 </article>
