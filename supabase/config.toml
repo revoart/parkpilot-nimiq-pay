@@ -100,3 +100,6 @@ verify_jwt = false
 
 [functions.verify-nim-payment]
 verify_jwt = false
+
+[functions.list-transactions]
+verify_jwt = false

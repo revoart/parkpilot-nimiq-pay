@@ -55,6 +55,11 @@ const SavedScreen = lazy(() =>
 const ProfileScreen = lazy(() =>
   import('@/screens/ProfileScreen').then((m) => ({ default: m.ProfileScreen })),
 )
+const PersonalWalletScreen = lazy(() =>
+  import('@/screens/PersonalWalletScreen').then((m) => ({
+    default: m.PersonalWalletScreen,
+  })),
+)
 const NotificationsScreen = lazy(() =>
   import('@/screens/NotificationsScreen').then((m) => ({
     default: m.NotificationsScreen,
@@ -138,6 +143,7 @@ export default function App() {
                     <Route path="/messages/:id" element={<ChatScreen />} />
                     <Route path="/saved" element={<SavedScreen />} />
                     <Route path="/profile" element={<ProfileScreen />} />
+                    <Route path="/wallet" element={<PersonalWalletScreen />} />
                     <Route
                       path="/notifications"
                       element={<NotificationsScreen />}

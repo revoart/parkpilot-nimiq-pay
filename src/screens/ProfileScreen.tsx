@@ -47,6 +47,7 @@ interface Row {
 }
 
 const ROWS: Row[] = [
+  { label: 'Personal Wallet', to: '/wallet' },
   { label: 'Messages', to: '/messages' },
   { label: 'Settings', to: '/settings' },
   { label: 'Privacy Policy', to: '/privacy' },
@@ -289,7 +290,7 @@ export function ProfileScreen() {
             {wallet.address ? (
               <Card className="space-y-3.5 p-4">
                 <div className="flex items-center justify-between">
-                  <Eyebrow>Wallet balance</Eyebrow>
+                  <Eyebrow>NIM Balance</Eyebrow>
                   <ChainBadge />
                 </div>
 
@@ -334,7 +335,7 @@ export function ProfileScreen() {
             ) : (
               <Card className="space-y-3.5 p-4">
                 <div className="flex items-center justify-between">
-                  <Eyebrow>Wallet balance</Eyebrow>
+                  <Eyebrow>NIM Balance</Eyebrow>
                   <ChainBadge />
                 </div>
                 <p className="text-[14px] leading-5 text-ink-muted">
@@ -393,7 +394,7 @@ export function ProfileScreen() {
           <>
             <Card className="space-y-3.5 p-4">
               <div className="flex items-center justify-between">
-                <Eyebrow>Host earnings</Eyebrow>
+                <Eyebrow>Host Earnings</Eyebrow>
                 <StatusPill tone="accent">Merchant</StatusPill>
               </div>
 
@@ -415,7 +416,7 @@ export function ProfileScreen() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-surface p-3">
-                  <p className="text-[11px] text-ink-muted">Pending</p>
+                  <p className="text-[11px] text-ink-muted">Pending Earnings</p>
                   <p className="mt-0.5 text-[17px] font-bold leading-none">
                     {hostEarnings ? formatNim(hostEarnings.pending) : '—'}
                   </p>
@@ -427,7 +428,7 @@ export function ProfileScreen() {
                   ) : null}
                 </div>
                 <div className="rounded-xl bg-surface p-3">
-                  <p className="text-[11px] text-ink-muted">Total earned</p>
+                  <p className="text-[11px] text-ink-muted">Host Revenue</p>
                   <p className="mt-0.5 text-[17px] font-bold leading-none">
                     {hostEarnings ? formatNim(hostEarnings.totalEarned) : '—'}
                   </p>

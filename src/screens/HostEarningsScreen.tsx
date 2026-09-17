@@ -134,7 +134,7 @@ export function HostEarningsScreen() {
               setOpen(true)
             }}
           >
-            Withdraw Earnings
+            Withdraw NIM
           </Button>
         ) : null
       }
@@ -164,7 +164,7 @@ export function HostEarningsScreen() {
         <div className="space-y-5">
           <div className="flex flex-col items-center gap-2 text-center">
             <p className="text-[11px] font-bold uppercase tracking-[1.2px] text-ink-faint">
-              Available for withdrawal
+              Available Earnings
             </p>
             <div className="flex items-center gap-2">
               <NimiqMark className="size-9" />
@@ -184,8 +184,8 @@ export function HostEarningsScreen() {
 
           <div className="grid grid-cols-3 gap-2.5">
             {[
-              { label: 'Pending', value: data.pending },
-              { label: 'Total earned', value: data.totalEarned },
+              { label: 'Pending Earnings', value: data.pending },
+              { label: 'Host Revenue', value: data.totalEarned },
               { label: 'Withdrawn', value: data.totalWithdrawn },
             ].map((stat) => (
               <div
@@ -207,6 +207,29 @@ export function HostEarningsScreen() {
                 />
               </div>
             ))}
+          </div>
+
+          {/*
+            USDT is a future settlement destination only. Nimiq's native
+            transaction API sends NIM — the only coin the wallet can move — so a
+            real conversion needs a separate provider (a swap, an on/off-ramp, or
+            a custodian). None is integrated, so this action stays disabled and
+            nothing is simulated: no success state, no fake transaction. If it is
+            ever built, the provider belongs in its own module so the NIM payout
+            path below is never entangled with a token rail.
+          */}
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-raised px-4 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.04)]">
+            <div className="min-w-0">
+              <p className="text-[15px] font-bold tracking-[-0.2px]">
+                Convert to USDT
+              </p>
+              <p className="mt-0.5 text-[12px] text-ink-muted">
+                USDT conversion is not available yet.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" disabled>
+              Convert to USDT
+            </Button>
           </div>
 
           {notice ? (
@@ -326,7 +349,7 @@ export function HostEarningsScreen() {
             loading={submitting}
             onClick={() => void handleWithdrawal()}
           >
-            Request withdrawal
+            Request NIM Withdrawal
           </Button>
         </div>
       </BottomSheet>
