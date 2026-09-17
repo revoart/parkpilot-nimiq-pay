@@ -50,7 +50,7 @@ verify_jwt = false
 [functions.auth-verify]
 verify_jwt = false
 
-[functions.get-host-wallet]
+[functions.get-host-earnings]
 verify_jwt = false
 
 [functions.request-payout]

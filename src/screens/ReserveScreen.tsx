@@ -508,9 +508,7 @@ export function ReserveScreen() {
               </span>
             </div>
             <div className="flex items-center justify-between py-1.5">
-              <span className="text-[14px] text-ink-muted">
-                Wallet service fee
-              </span>
+              <span className="text-[14px] text-ink-muted">Platform fee</span>
               <span className="text-[14px] font-semibold">0.00 NIM</span>
             </div>
             <div className="my-2 h-px bg-line" />

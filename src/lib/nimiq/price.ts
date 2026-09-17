@@ -53,7 +53,7 @@ export function usdtValueOfNim(
  * Amounts below a cent are reported as "<0.01" rather than rounded to "0.00",
  * which would read as free when it is not.
  */
-export function formatUsdtAmount(value: number): string {
+export function formatUsdAmount(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0.00'
   if (value < 0.01) return '<0.01'
   return value.toFixed(2)

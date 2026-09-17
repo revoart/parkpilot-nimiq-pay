@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  PUBLIC_HEX_ALLOWLIST,
   findMnemonics,
   findPrivateKeys,
   findSecretAssignments,
@@ -75,11 +76,23 @@ describe('findPrivateKeys', () => {
     expect(findPrivateKeys(`0x${'b'.repeat(64)}`)).toHaveLength(1)
   })
 
-  it('ignores the public ERC-20 Transfer topic', () => {
-    // Present in this repo; a 64-hex value that is not a secret.
-    const topic =
-      '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
-    expect(findPrivateKeys(topic)).toHaveLength(0)
+  it('allows a value on the public allow-list', () => {
+    // The mechanism matters even though the list is currently empty: the ERC-20
+    // transfer topic it used to hold went with the EVM rail, and the next
+    // public constant will need somewhere to live.
+    const value = 'a'.repeat(64)
+    expect(findPrivateKeys(value)).toHaveLength(1)
+
+    PUBLIC_HEX_ALLOWLIST.add(value)
+    try {
+      expect(findPrivateKeys(value)).toHaveLength(0)
+    } finally {
+      PUBLIC_HEX_ALLOWLIST.delete(value)
+    }
+  })
+
+  it('still reports a 64-hex value that is not on the list', () => {
+    expect(findPrivateKeys(`0x${'e'.repeat(64)}`)).toHaveLength(1)
   })
 
   it('ignores hex that is shorter or longer than a key', () => {

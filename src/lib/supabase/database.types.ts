@@ -68,24 +68,6 @@ export type Database = {
         }
         Relationships: []
       }
-      host_wallets: {
-        Row: {
-          host_address: string
-          payout_address: string
-          updated_at: string
-        }
-        Insert: {
-          host_address: string
-          payout_address: string
-          updated_at?: string
-        }
-        Update: {
-          host_address?: string
-          payout_address?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       ledger_accounts: {
         Row: {
           created_at: string
@@ -298,7 +280,6 @@ export type Database = {
           longitude: number
           owner_nimiq_address: string | null
           parking_type: string | null
-          payment_recipient_address: string
           price_nim: number
           title: string
           updated_at: string
@@ -317,7 +298,6 @@ export type Database = {
           longitude: number
           owner_nimiq_address?: string | null
           parking_type?: string | null
-          payment_recipient_address: string
           price_nim: number
           title: string
           updated_at?: string
@@ -336,7 +316,6 @@ export type Database = {
           longitude?: number
           owner_nimiq_address?: string | null
           parking_type?: string | null
-          payment_recipient_address?: string
           price_nim?: number
           title?: string
           updated_at?: string
@@ -444,7 +423,6 @@ export type Database = {
           completed_at: string | null
           host_address: string
           id: string
-          payout_address: string
           requested_at: string
           status: string
           tx_hash: string | null
@@ -455,7 +433,6 @@ export type Database = {
           completed_at?: string | null
           host_address: string
           id?: string
-          payout_address: string
           requested_at?: string
           status?: string
           tx_hash?: string | null
@@ -466,7 +443,6 @@ export type Database = {
           completed_at?: string | null
           host_address?: string
           id?: string
-          payout_address?: string
           requested_at?: string
           status?: string
           tx_hash?: string | null
@@ -659,7 +635,6 @@ export type Database = {
           latitude: number
           longitude: number
           price_nim: number
-          payment_recipient_address: string
           parking_type: string | null
           covered: boolean
           ev_charging: boolean
@@ -676,11 +651,10 @@ export type Database = {
         }[]
       }
       request_payout: {
-        Args: { p_amount: number; p_host: string; p_payout_address: string }
+        Args: { p_amount: number; p_host: string }
         Returns: {
           amount_nim: number
           id: string
-          payout_address: string
           requested_at: string
           status: string
         }[]

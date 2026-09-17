@@ -15,7 +15,7 @@ import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useWallet } from '@/hooks/useWallet'
 import {
   deleteParkingSpace,
-  getHostEarnings,
+  getHostEarningsSummary,
   listHostBookings,
   listHostSpaces,
   type HostBooking,
@@ -66,7 +66,7 @@ export function HostDashboardScreen() {
       const [spaceList, bookingList, earnings] = await Promise.all([
         listHostSpaces(wallet.address),
         listHostBookings(wallet.address),
-        getHostEarnings(wallet.address),
+        getHostEarningsSummary(wallet.address),
       ])
       setSpaces(spaceList)
       setBookings(bookingList)

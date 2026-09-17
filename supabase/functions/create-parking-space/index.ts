@@ -91,7 +91,6 @@ Deno.serve(async (request) => {
         longitude,
         price_nim: price.toFixed(6),
         description: body.description?.trim() || null,
-        payment_recipient_address: owner,
         owner_nimiq_address: owner,
         parking_type: parkingType,
         covered: Boolean(body.covered),

@@ -1,4 +1,4 @@
-import { english } from 'viem/accounts'
+import { english } from './bip39-english.ts'
 
 /**
  * Detection of accidentally-committed secrets.
@@ -21,12 +21,11 @@ const MIN_MNEMONIC_WORDS = 12
  * 64-hex values that are public constants, not secrets.
  *
  * A 64-hex string is also a transaction hash or an event topic, so without this
- * the check would fail on any repo that references one.
+ * the check would fail on any repo that references one. The list is empty today
+ * — the ERC-20 transfer topic it used to carry went with the EVM rail — but the
+ * mechanism stays, because the next public constant will need it.
  */
-export const PUBLIC_HEX_ALLOWLIST = new Set([
-  // keccak256("Transfer(address,address,uint256)")
-  'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
-])
+export const PUBLIC_HEX_ALLOWLIST = new Set<string>([])
 
 /** Values that are obviously placeholders rather than real secrets. */
 const PLACEHOLDER = /^(your|my|the|xxx+|<|\.{3}|example|changeme|placeholder|todo|redacted|dummy|test)/i

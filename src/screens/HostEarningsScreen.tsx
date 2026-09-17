@@ -11,8 +11,7 @@ import { StatusPill } from '@/components/ui/StatusPill'
 import { useToast } from '@/components/ui/Toast'
 import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { useWallet } from '@/hooks/useWallet'
-import { getHostWallet, requestPayout, type HostWallet } from '@/lib/host'
-import { isValidNimiqAddress, normalizeNimiqAddress } from '@/lib/nimiq'
+import { getHostEarnings, requestPayout, type HostEarnings } from '@/lib/host'
 import { cn } from '@/utils/cn'
 import { explorerTxUrl } from '@/utils/explorer'
 import { hapticConfirm } from '@/utils/haptics'
@@ -32,16 +31,15 @@ const PAYOUT_LABEL = {
   failed: 'Failed',
 } as const
 
-export function HostWalletScreen() {
+export function HostEarningsScreen() {
   const wallet = useWallet()
   const toast = useToast()
-  const [data, setData] = useState<HostWallet | null>(null)
+  const [data, setData] = useState<HostEarnings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
-  const [payoutAddress, setPayoutAddress] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -53,9 +51,8 @@ export function HostWalletScreen() {
     setLoading(true)
     setError(null)
     try {
-      const result = await getHostWallet(wallet.address)
+      const result = await getHostEarnings(wallet.address)
       setData(result)
-      setPayoutAddress((current) => current || result.payout_address || '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load.')
     } finally {
@@ -84,14 +81,10 @@ export function HostWalletScreen() {
       setNotice('Amount exceeds your available balance.')
       return
     }
-    if (!isValidNimiqAddress(payoutAddress.trim())) {
-      setNotice('Enter a valid Nimiq payout address.')
-      return
-    }
 
     setSubmitting(true)
     try {
-      await requestPayout(wallet.address, value, normalizeNimiqAddress(payoutAddress))
+      await requestPayout(wallet.address, value)
       setOpen(false)
       setAmount('')
       setNotice('Withdrawal requested. ParkPilot will process it shortly.')
@@ -111,7 +104,7 @@ export function HostWalletScreen() {
         <EmptyState
           icon={<Wallet className="size-5" />}
           title="Connect your wallet"
-          description="Connect Nimiq Pay to see your host wallet."
+          description="Connect Nimiq Pay to see your host earnings."
           action={
             <Button size="md" onClick={() => void wallet.connect()}>
               Connect Wallet
@@ -159,7 +152,7 @@ export function HostWalletScreen() {
         </div>
       ) : error || !data ? (
         <EmptyState
-          title="Couldn't load your wallet"
+          title="Couldn't load your earnings"
           description={error ?? 'Try again.'}
           action={
             <Button variant="secondary" size="md" onClick={() => void load()}>
@@ -323,22 +316,6 @@ export function HostWalletScreen() {
                 {data.min_payout_nim} NIM
               </p>
             ) : null}
-          </div>
-
-          <div className="space-y-1.5">
-            <label
-              htmlFor="payout-address"
-              className="text-xs font-semibold text-ink-soft"
-            >
-              Payout address (Nimiq)
-            </label>
-            <input
-              id="payout-address"
-              value={payoutAddress}
-              onChange={(event) => setPayoutAddress(event.target.value)}
-              placeholder="NQ…"
-              className="w-full rounded-xl bg-surface px-3.5 py-3 font-mono text-[13px] outline-none placeholder:text-ink-faint"
-            />
           </div>
 
           {notice ? <p className="text-sm text-danger">{notice}</p> : null}

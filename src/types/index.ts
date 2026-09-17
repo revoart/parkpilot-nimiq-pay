@@ -22,7 +22,6 @@ export interface ParkingSpace {
   longitude: number
   /** Hourly price in NIM. Shown with a USDT equivalent beside it. */
   price_nim: number
-  payment_recipient_address: string
   parking_type: string | null
   covered: boolean
   ev_charging: boolean

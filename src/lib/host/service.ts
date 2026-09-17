@@ -28,7 +28,7 @@ export interface HostBooking {
   txHash: string | null
 }
 
-export interface HostEarnings {
+export interface HostEarningsSummary {
   total: number
   today: number
   week: number
@@ -79,7 +79,6 @@ function normalizeSpace(row: Record<string, unknown>): ParkingSpace {
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
     price_nim: Number(row.price_nim),
-    payment_recipient_address: String(row.payment_recipient_address ?? ''),
     parking_type: (row.parking_type as string | null) ?? null,
     covered: Boolean(row.covered),
     ev_charging: Boolean(row.ev_charging),
@@ -206,7 +205,9 @@ export async function listHostBookings(nimiqAddress: string): Promise<HostBookin
   })
 }
 
-export async function getHostEarnings(nimiqAddress: string): Promise<HostEarnings> {
+export async function getHostEarningsSummary(
+  nimiqAddress: string,
+): Promise<HostEarningsSummary> {
   const supabase = getSupabase()
   const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('host-earnings', {
@@ -219,7 +220,7 @@ export async function getHostEarnings(nimiqAddress: string): Promise<HostEarning
     )
   }
 
-  const payload = data as (HostEarnings & { error?: string }) | null
+  const payload = data as (HostEarningsSummary & { error?: string }) | null
   if (!payload || payload.error) {
     throw new Error(payload?.error ?? 'Could not load your earnings.')
   }
@@ -243,36 +244,36 @@ export interface HostPayout {
   block_number: number | null
   requested_at: string
   completed_at: string | null
-  payout_address: string
 }
 
-export interface HostWallet {
+export interface HostEarnings {
   available: number
   pending: number
   totalEarned: number
   totalWithdrawn: number
-  payout_address: string | null
   min_payout_nim: number
   fee_bps: number
   payouts: HostPayout[]
 }
 
-export async function getHostWallet(nimiqAddress: string): Promise<HostWallet> {
+export async function getHostEarnings(
+  nimiqAddress: string,
+): Promise<HostEarnings> {
   const supabase = getSupabase()
   const authToken = await requireToken(nimiqAddress)
-  const { data, error } = await supabase.functions.invoke('get-host-wallet', {
+  const { data, error } = await supabase.functions.invoke('get-host-earnings', {
     body: { auth_token: authToken },
   })
 
   if (error) {
     throw new Error(
-      await readFunctionError(error, 'Could not load your wallet.'),
+      await readFunctionError(error, 'Could not load your earnings.'),
     )
   }
 
-  const payload = data as (HostWallet & { error?: string }) | null
+  const payload = data as (HostEarnings & { error?: string }) | null
   if (!payload || payload.error) {
-    throw new Error(payload?.error ?? 'Could not load your wallet.')
+    throw new Error(payload?.error ?? 'Could not load your earnings.')
   }
 
   return {
@@ -280,7 +281,6 @@ export async function getHostWallet(nimiqAddress: string): Promise<HostWallet> {
     pending: Number(payload.pending ?? 0),
     totalEarned: Number(payload.totalEarned ?? 0),
     totalWithdrawn: Number(payload.totalWithdrawn ?? 0),
-    payout_address: payload.payout_address ?? null,
     min_payout_nim: Number(payload.min_payout_nim ?? 1),
     fee_bps: Number(payload.fee_bps ?? 0),
     payouts: (payload.payouts ?? []).map((payout) => ({
@@ -293,14 +293,12 @@ export async function getHostWallet(nimiqAddress: string): Promise<HostWallet> {
 export async function requestPayout(
   nimiqAddress: string,
   amountNim: number,
-  payoutAddress: string,
 ): Promise<void> {
   const supabase = getSupabase()
   const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('request-payout', {
     body: {
       amount_nim: amountNim,
-      payout_address: payoutAddress,
       auth_token: authToken,
     },
   })

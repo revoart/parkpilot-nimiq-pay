@@ -6,7 +6,7 @@ import { cn } from '@/utils/cn'
 const ITEMS = [
   { to: '/host', label: 'Dashboard', icon: LayoutGrid, end: true },
   { to: '/host/bookings', label: 'Bookings', icon: CalendarCheck, end: false },
-  { to: '/host/earnings', label: 'Wallet', icon: TrendingUp, end: false },
+  { to: '/host/earnings', label: 'Earnings', icon: TrendingUp, end: false },
   { to: '/profile', label: 'Profile', icon: User, end: false },
 ]
 

@@ -9,12 +9,6 @@ export function formatNim(value: string | number, decimals = 2): string {
   return numeric.toFixed(decimals)
 }
 
-/**
- * @deprecated Use `formatNim`. Kept only for the EVM wallet plumbing that is
- * still present pending its removal.
- */
-export const formatUsdt = formatNim
-
 export function formatDistanceKm(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)} m`
   return `${km.toFixed(1)} km`

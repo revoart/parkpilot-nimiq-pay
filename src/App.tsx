@@ -85,9 +85,9 @@ const HostBookingsScreen = lazy(() =>
     default: m.HostBookingsScreen,
   })),
 )
-const HostWalletScreen = lazy(() =>
-  import('@/screens/HostWalletScreen').then((m) => ({
-    default: m.HostWalletScreen,
+const HostEarningsScreen = lazy(() =>
+  import('@/screens/HostEarningsScreen').then((m) => ({
+    default: m.HostEarningsScreen,
   })),
 )
 const MessagesScreen = lazy(() =>
@@ -150,7 +150,7 @@ export default function App() {
                     <Route path="/host/add" element={<HostAddScreen />} />
                     <Route path="/host/space/:id" element={<HostSpaceScreen />} />
                     <Route path="/host/bookings" element={<HostBookingsScreen />} />
-                    <Route path="/host/earnings" element={<HostWalletScreen />} />
+                    <Route path="/host/earnings" element={<HostEarningsScreen />} />
 
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

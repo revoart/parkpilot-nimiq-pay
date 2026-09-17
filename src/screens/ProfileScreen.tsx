@@ -22,15 +22,14 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { UsdEquivalent } from '@/components/ui/UsdEquivalent'
 import { ChainBadge } from '@/components/wallet/ChainBadge'
-import { NimiqIdentityCard } from '@/components/wallet/NimiqIdentityCard'
 import { useAppMode, type AppMode } from '@/hooks/useAppMode'
 import { useProfile } from '@/hooks/useProfile'
 import { useWallet } from '@/hooks/useWallet'
 import {
-  getHostWallet,
+  getHostEarnings,
   listHostSpaces,
   type HostSpace,
-  type HostWallet,
+  type HostEarnings,
 } from '@/lib/host'
 import {
   listReservations,
@@ -121,7 +120,7 @@ export function ProfileScreen() {
   const tel = telHref(profile?.phone)
 
   const [bookings, setBookings] = useState<ReservationSummary[]>([])
-  const [hostWallet, setHostWallet] = useState<HostWallet | null>(null)
+  const [hostEarnings, setHostEarnings] = useState<HostEarnings | null>(null)
   const [hostSpaces, setHostSpaces] = useState<HostSpace[]>([])
   const [dataLoading, setDataLoading] = useState(false)
 
@@ -151,11 +150,11 @@ export function ProfileScreen() {
     let active = true
     setDataLoading(true)
     void Promise.all([
-      getHostWallet(wallet.address).catch(() => null),
+      getHostEarnings(wallet.address).catch(() => null),
       listHostSpaces(wallet.address).catch(() => []),
     ]).then(([walletData, spaces]) => {
       if (!active) return
-      setHostWallet(walletData)
+      setHostEarnings(walletData)
       setHostSpaces(spaces)
       setDataLoading(false)
     })
@@ -389,28 +388,27 @@ export function ProfileScreen() {
             ) : null}
 
             <SettingsRows rows={ROWS} />
-            <NimiqIdentityCard />
           </>
         ) : (
           <>
             <Card className="space-y-3.5 p-4">
               <div className="flex items-center justify-between">
-                <Eyebrow>Host wallet</Eyebrow>
+                <Eyebrow>Host earnings</Eyebrow>
                 <StatusPill tone="accent">Merchant</StatusPill>
               </div>
 
               <div className="flex items-baseline gap-2">
                 <NimiqMark className="size-8 shrink-0 self-center" />
                 <span className="text-[34px] font-extrabold leading-none tracking-[-1px]">
-                  {hostWallet ? formatNim(hostWallet.available) : '—'}
+                  {hostEarnings ? formatNim(hostEarnings.available) : '—'}
                 </span>
                 <span className="text-[20px] font-extrabold leading-none text-brand">
                   NIM
                 </span>
               </div>
-              {hostWallet ? (
+              {hostEarnings ? (
                 <UsdEquivalent
-                  nim={hostWallet.available}
+                  nim={hostEarnings.available}
                   className="text-[13px] text-ink-muted"
                 />
               ) : null}
@@ -419,11 +417,11 @@ export function ProfileScreen() {
                 <div className="rounded-xl bg-surface p-3">
                   <p className="text-[11px] text-ink-muted">Pending</p>
                   <p className="mt-0.5 text-[17px] font-bold leading-none">
-                    {hostWallet ? formatNim(hostWallet.pending) : '—'}
+                    {hostEarnings ? formatNim(hostEarnings.pending) : '—'}
                   </p>
-                  {hostWallet ? (
+                  {hostEarnings ? (
                     <UsdEquivalent
-                      nim={hostWallet.pending}
+                      nim={hostEarnings.pending}
                       className="mt-1 block text-[10px] text-ink-muted"
                     />
                   ) : null}
@@ -431,11 +429,11 @@ export function ProfileScreen() {
                 <div className="rounded-xl bg-surface p-3">
                   <p className="text-[11px] text-ink-muted">Total earned</p>
                   <p className="mt-0.5 text-[17px] font-bold leading-none">
-                    {hostWallet ? formatNim(hostWallet.totalEarned) : '—'}
+                    {hostEarnings ? formatNim(hostEarnings.totalEarned) : '—'}
                   </p>
-                  {hostWallet ? (
+                  {hostEarnings ? (
                     <UsdEquivalent
-                      nim={hostWallet.totalEarned}
+                      nim={hostEarnings.totalEarned}
                       className="mt-1 block text-[10px] text-ink-muted"
                     />
                   ) : null}

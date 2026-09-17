@@ -26,7 +26,7 @@ interface Body {
 
 /**
  * Settles a payout: verifies on-chain that the treasury actually sent NIM to
- * the host's payout address, then marks it paid and posts the ledger debit.
+ * the host's own Nimiq account, then marks it paid and posts the ledger debit.
  *
  * Only the ParkPilot treasury wallet may call this. The transaction hash is
  * never trusted on its own — without the receipt check a mistyped hash would
@@ -82,7 +82,7 @@ Deno.serve(async (request) => {
 
     const { data: payout, error } = await supabase
       .from('payouts')
-      .select('id, host_address, payout_address, amount_nim, status')
+      .select('id, host_address, amount_nim, status')
       .eq('id', body.payout_id)
       .single()
 
@@ -121,15 +121,15 @@ Deno.serve(async (request) => {
     }
 
     const treasury = normalizeNimiqAddress(config.treasuryAddress)
-    const recipient = normalizeNimiqAddress(payout.payout_address)
 
-    if (!isValidNimiqAddress(payout.payout_address)) {
+    if (!isValidNimiqAddress(payout.host_address)) {
       return errorResponse(
         request,
         'This payout has no valid Nimiq address on file.',
         409,
       )
     }
+    const recipient = normalizeNimiqAddress(payout.host_address)
 
     if (normalizeNimiqAddress(transaction.from) !== treasury) {
       return errorResponse(
@@ -142,7 +142,7 @@ Deno.serve(async (request) => {
     if (normalizeNimiqAddress(transaction.to) !== recipient) {
       return errorResponse(
         request,
-        `That transaction did not pay ${payout.payout_address}.`,
+        `That transaction did not pay ${payout.host_address}.`,
         400,
       )
     }

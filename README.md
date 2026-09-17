@@ -361,13 +361,13 @@ written off).
 
 `mark-payout-paid` **verifies the transfer on-chain before settling**: it
 fetches the transaction and asserts it succeeded and sent NIM from the treasury
-to the host's payout address for **at least** the payout amount. A mistyped
+to the host's own Nimiq account for **at least** the payout amount. A mistyped
 hash, a failed transaction, a wrong recipient or an underpayment are all
 rejected, so a payout can never be marked paid in the books while no money
 moved. One transaction hash can settle **only one** payout.
 
-Hosts can verify their own payouts: the host wallet lists each withdrawal with a
-**View transaction** link to the Nimiq explorer.
+Hosts can verify their own payouts: the earnings screen lists each withdrawal
+with a **View transaction** link to the Nimiq explorer.
 
 #### Arming it
 
@@ -433,10 +433,11 @@ Every active listing has **exactly one** photo. No galleries, no carousels.
 `get-profile` / `update-profile` / `upload-avatar`). Changing the name, bio or
 photo in one mode updates the other.
 
-The **views stay separate**: Driver shows the spending wallet (the NIM balance
-of the connected account, address, manage), Host shows the earnings wallet
-(available / pending / total earned + Withdraw). They are never merged or
-presented as one balance.
+There is **one Nimiq wallet per user**. Driver and Host are application roles,
+not separate wallets: the same connected Nimiq account signs in, pays, and
+receives. Host earnings are an **accounting classification** in the internal
+ledger (available / pending / total earned + Withdraw) — they are not a second
+wallet and are never presented as one.
 
 ---
 
@@ -742,7 +743,7 @@ supabase functions deploy \
   create-parking-space update-parking-space delete-parking-space \
   list-host-spaces list-host-bookings host-earnings set-availability \
   request-payout payout-config begin-payout-send record-payout-send \
-  mark-payout-paid fail-payout get-host-wallet \
+  mark-payout-paid fail-payout get-host-earnings \
   get-profile update-profile upload-avatar upload-parking-photo \
   list-conversations list-messages send-message
 ```
@@ -755,8 +756,8 @@ Migrations in `supabase/migrations/`:
   deny-by-default for reservations/payments/identities.
 - `0003_seed.sql` — now intentionally empty; the eight demo Toronto listings it
   used to insert were deleted by `0021_remove_demo_catalogue.sql`.
-- `0009_treasury.sql` — platform settings, the internal ledger, host payout
-  wallets and payout requests.
+- `0009_treasury.sql` — platform settings, the internal ledger and payout
+  requests.
 - `0010_free_test_listing.sql` — now intentionally empty; the free demo listing
   it used to insert was removed by `0021_remove_demo_catalogue.sql`.
 - `0013_restore_seed_listings.sql` — now intentionally empty.

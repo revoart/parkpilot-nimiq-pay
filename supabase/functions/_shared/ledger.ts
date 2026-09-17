@@ -1,5 +1,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 
+import { lunaToNim, nimToLuna } from './nimiq.ts'
+
 export interface PlatformConfig {
   feeBps: number
   treasuryAddress: string
@@ -188,7 +190,7 @@ export async function creditPayment(
   }
 }
 
-export interface HostWalletSummary {
+export interface HostEarningsSummary {
   available: number
   pending: number
   totalEarned: number
@@ -196,10 +198,32 @@ export interface HostWalletSummary {
 }
 
 /** Derive a host's balances from the ledger (never a mutable counter). */
-export async function getHostWalletSummary(
+/**
+ * Sum a decimal NIM column as exact Luna.
+ *
+ * `nimToLuna` parses the decimal string with integer arithmetic, so this never
+ * touches a float. Rows that cannot be parsed are skipped rather than poisoning
+ * the total — one malformed row must not blank out a host's whole balance.
+ */
+function sumLuna(
+  rows: Record<string, unknown>[] | null,
+  column: string,
+): bigint {
+  let total = 0n
+  for (const row of rows ?? []) {
+    try {
+      total += nimToLuna(String(row[column] ?? '0'))
+    } catch {
+      continue
+    }
+  }
+  return total
+}
+
+export async function getHostEarningsSummary(
   supabase: SupabaseClient,
   hostAddress: string,
-): Promise<HostWalletSummary> {
+): Promise<HostEarningsSummary> {
   const address = hostAddress.toLowerCase()
 
   const { data: account } = await supabase
@@ -210,23 +234,34 @@ export async function getHostWalletSummary(
     .eq('currency', 'NIM')
     .maybeSingle()
 
-  let totalEarned = 0
-  let totalWithdrawn = 0
+  // Every sum below runs in Luna, the exact integer the chain moves. Adding
+  // decimal NIM as floats drifts, and a balance that drifts eventually
+  // disagrees with the ledger it was derived from.
+  //
+  // Ledger entries carry `amount_raw` (Luna); payouts and reservations only
+  // carry a decimal NIM string, which `nimToLuna` parses with integer
+  // arithmetic rather than through a float.
+  let earnedLuna = 0n
+  let withdrawnLuna = 0n
 
   if (account) {
     const { data: entries } = await supabase
       .from('ledger_entries')
-      .select('entry_type, direction, amount_nim')
+      .select('entry_type, direction, amount_raw')
       .eq('account_id', account.id)
 
     for (const entry of entries ?? []) {
-      const amount = Number(entry.amount_nim)
-      if (!Number.isFinite(amount)) continue
+      let amount: bigint
+      try {
+        amount = BigInt(String(entry.amount_raw))
+      } catch {
+        continue
+      }
       if (entry.entry_type === 'earning' && entry.direction === 'credit') {
-        totalEarned += amount
+        earnedLuna += amount
       }
       if (entry.entry_type === 'payout' && entry.direction === 'debit') {
-        totalWithdrawn += amount
+        withdrawnLuna += amount
       }
     }
   }
@@ -237,10 +272,7 @@ export async function getHostWalletSummary(
     .ilike('host_address', address)
     .eq('status', 'requested')
 
-  const reserved = (inFlight ?? []).reduce(
-    (sum, row) => sum + Number(row.amount_nim ?? 0),
-    0,
-  )
+  const reservedLuna = sumLuna(inFlight, 'amount_nim')
 
   // Pending = reserved-but-unpaid host earnings on open reservations.
   const { data: spaces } = await supabase
@@ -248,7 +280,7 @@ export async function getHostWalletSummary(
     .select('id')
     .ilike('owner_nimiq_address', address)
 
-  let pending = 0
+  let pendingLuna = 0n
   const spaceIds = (spaces ?? []).map((row) => row.id as string)
   if (spaceIds.length > 0) {
     const { data: reservations } = await supabase
@@ -257,20 +289,16 @@ export async function getHostWalletSummary(
       .in('parking_space_id', spaceIds)
       .eq('status', 'reservation_pending')
 
-    pending = (reservations ?? []).reduce(
-      (sum, row) => sum + Number(row.host_amount_nim ?? 0),
-      0,
-    )
+    pendingLuna = sumLuna(reservations, 'host_amount_nim')
   }
 
-  const available = Math.max(0, totalEarned - totalWithdrawn - reserved)
-
-  const round = (value: number) => Number(value.toFixed(6))
+  const availableLuna = earnedLuna - withdrawnLuna - reservedLuna
+  const toNim = (luna: bigint) => Number(lunaToNim(luna < 0n ? 0n : luna))
 
   return {
-    available: round(available),
-    pending: round(pending),
-    totalEarned: round(totalEarned),
-    totalWithdrawn: round(totalWithdrawn),
+    available: toNim(availableLuna),
+    pending: toNim(pendingLuna),
+    totalEarned: toNim(earnedLuna),
+    totalWithdrawn: toNim(withdrawnLuna),
   }
 }

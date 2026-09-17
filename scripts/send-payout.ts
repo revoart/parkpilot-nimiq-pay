@@ -7,6 +7,7 @@ import {
   buildSignedPayout,
   deriveKeyPair,
 } from './lib/treasury.ts'
+import { nimToLuna } from '../src/lib/nimiq/amounts.ts'
 
 /**
  * Sends a host payout from the treasury, in NIM, using a local mnemonic.
@@ -44,7 +45,6 @@ interface Config {
 interface Payout {
   id: string
   host_address: string
-  payout_address: string
   amount_nim: number
   resume?: boolean
   raw_tx?: string | null
@@ -268,12 +268,14 @@ async function main(): Promise<void> {
     console.log(`  resuming a signed send: ${claim.raw_tx?.slice(0, 24)}...`)
   } else {
     console.log(
-      `  claimed ${claim.amount_nim} NIM -> ${claim.payout_address}`,
+      `  claimed ${claim.amount_nim} NIM -> ${claim.host_address}`,
     )
   }
 
-  if (!claim.payout_address) {
-    fail('The payout has no destination address.')
+  // A payout goes to the host's own Nimiq account — there is no separate payout
+  // destination, and no second wallet.
+  if (!claim.host_address) {
+    fail('The payout has no host account.')
   }
 
   // Preflight: the treasury must actually hold enough NIM. Nimiq has no gas
@@ -282,7 +284,8 @@ async function main(): Promise<void> {
     config.treasuryAddress,
   ])
   const balance = BigInt(account?.balance ?? 0)
-  const needed = BigInt(Math.round(claim.amount_nim * 100_000))
+  // Exact Luna, never `amount * 100_000` — that is a float on a money value.
+  const needed = nimToLuna(String(claim.amount_nim))
 
   console.log(`  treasury balance: ${balance} Luna (need ${needed})`)
 
@@ -302,7 +305,7 @@ async function main(): Promise<void> {
     const head = await rpc<number>(config, 'getBlockNumber', [])
     const signed = buildSignedPayout(keyPair, {
       sender: config.treasuryAddress,
-      recipient: claim.payout_address,
+      recipient: claim.host_address,
       amountNim: String(claim.amount_nim),
       validityStartHeight: head,
       networkId: config.networkId,
@@ -375,7 +378,7 @@ async function main(): Promise<void> {
     auth_token: token,
   })
 
-  console.log(`\n  paid ${claim.amount_nim} NIM to ${claim.payout_address}\n`)
+  console.log(`\n  paid ${claim.amount_nim} NIM to ${claim.host_address}\n`)
 }
 
 main().catch((error) => {

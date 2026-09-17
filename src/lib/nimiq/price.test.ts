@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   MAX_EQUIVALENT_AGE_MS,
-  formatUsdtAmount,
+  formatUsdAmount,
   isRateFresh,
   usdtValueOfLuna,
   usdtValueOfNim,
@@ -56,23 +56,23 @@ describe('usdtValueOfLuna', () => {
   })
 })
 
-describe('formatUsdtAmount', () => {
+describe('formatUsdAmount', () => {
   it('uses two decimals for normal amounts', () => {
-    expect(formatUsdtAmount(1.9)).toBe('1.90')
-    expect(formatUsdtAmount(0.19)).toBe('0.19')
-    expect(formatUsdtAmount(12)).toBe('12.00')
+    expect(formatUsdAmount(1.9)).toBe('1.90')
+    expect(formatUsdAmount(0.19)).toBe('0.19')
+    expect(formatUsdAmount(12)).toBe('12.00')
   })
 
   it('reports sub-cent amounts as "<0.01" rather than "0.00"', () => {
     // Rounding to 0.00 would read as free, which it is not.
-    expect(formatUsdtAmount(0.001)).toBe('<0.01')
-    expect(formatUsdtAmount(0.009)).toBe('<0.01')
+    expect(formatUsdAmount(0.001)).toBe('<0.01')
+    expect(formatUsdAmount(0.009)).toBe('<0.01')
   })
 
   it('is "0.00" only for genuinely zero or invalid input', () => {
-    expect(formatUsdtAmount(0)).toBe('0.00')
-    expect(formatUsdtAmount(-1)).toBe('0.00')
-    expect(formatUsdtAmount(Number.NaN)).toBe('0.00')
+    expect(formatUsdAmount(0)).toBe('0.00')
+    expect(formatUsdAmount(-1)).toBe('0.00')
+    expect(formatUsdAmount(Number.NaN)).toBe('0.00')
   })
 })
 

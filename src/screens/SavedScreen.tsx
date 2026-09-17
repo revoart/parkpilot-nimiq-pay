@@ -15,7 +15,6 @@ function toParkingSpace(saved: SavedParking): ParkingSpace {
   return {
     ...saved,
     description: null,
-    payment_recipient_address: '',
     active: true,
     created_at: '',
     updated_at: '',

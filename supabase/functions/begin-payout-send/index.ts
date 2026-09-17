@@ -55,7 +55,7 @@ Deno.serve(async (request) => {
     const { data: existing } = await supabase
       .from('payouts')
       .select(
-        'id, host_address, payout_address, amount_nim, requested_at, status, raw_tx, tx_hash',
+        'id, host_address, amount_nim, requested_at, status, raw_tx, tx_hash',
       )
       .eq('id', payoutId)
       .maybeSingle()
@@ -66,7 +66,6 @@ Deno.serve(async (request) => {
         payout: {
           id: existing.id,
           host_address: existing.host_address,
-          payout_address: existing.payout_address,
           amount_nim: Number(existing.amount_nim),
           requested_at: existing.requested_at,
         },
@@ -101,7 +100,6 @@ Deno.serve(async (request) => {
       payout: {
         id: payout.id,
         host_address: payout.host_address,
-        payout_address: payout.payout_address,
         amount_nim: Number(payout.amount_nim),
         requested_at: payout.requested_at,
       },

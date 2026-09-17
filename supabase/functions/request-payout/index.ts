@@ -1,16 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 import { readToken, verifyToken } from '../_shared/auth.ts'
-import { isValidNimiqAddress } from '../_shared/nimiq.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
   amount_nim?: number | string
-  payout_address?: string
 }
 
 /**
- * Host requests a withdrawal of available funds to an external wallet.
+ * Host requests a withdrawal of available funds to their own Nimiq account.
  *
  * The balance check and the insert happen inside the `request_payout` Postgres
  * function, which locks the host's ledger account — so concurrent requests
@@ -36,10 +34,6 @@ Deno.serve(async (request) => {
       )
     }
 
-    if (!isValidNimiqAddress(body.payout_address)) {
-      return errorResponse(request, 'Invalid payout address.')
-    }
-
     const amount = Number(body.amount_nim)
     if (!Number.isFinite(amount) || amount <= 0) {
       return errorResponse(request, 'Enter a valid amount.')
@@ -53,7 +47,6 @@ Deno.serve(async (request) => {
     const { data, error } = await supabase.rpc('request_payout', {
       p_host: owner,
       p_amount: amount,
-      p_payout_address: body.payout_address,
     })
 
     if (error) {

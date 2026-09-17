@@ -1,5 +1,5 @@
 import { useNimPrice } from '@/hooks/useNimPrice'
-import { formatUsdtAmount, usdtValueOfNim } from '@/lib/nimiq/price'
+import { formatUsdAmount, usdtValueOfNim } from '@/lib/nimiq/price'
 import { cn } from '@/utils/cn'
 
 /**
@@ -30,7 +30,7 @@ export function UsdEquivalent({
 
   return (
     <span className={cn('whitespace-nowrap', className)}>
-      ≈ {formatUsdtAmount(value)} USDT
+      ≈ {formatUsdAmount(value)} USDT
     </span>
   )
 }

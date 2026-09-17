@@ -99,7 +99,7 @@ Deno.serve(async (request) => {
 
     const { data: space, error: spaceError } = await supabase
       .from('parking_spaces')
-      .select('id, price_nim, payment_recipient_address, active')
+      .select('id, price_nim, active')
       .eq('id', parking_space_id)
       .single()
 

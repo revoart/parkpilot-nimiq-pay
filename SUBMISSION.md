@@ -43,10 +43,15 @@ parking, with Nimiq Pay as the rails.
 - [ ] Screenshots (home, search, detail, review, payment, pass, my parking)
 - [x] MIT `LICENSE`
 - [x] 250-word description (above)
-- [ ] Nimiq wallet payout address
+- [x] Nimiq wallet (single account — identity and payments)
 - [ ] Designated team lead
 
-### Nimiq payout address
+### Nimiq wallet
+
+ParkPilot uses **one Nimiq wallet per user**; driver and host are application
+roles, and host earnings are internal ledger accounting, not a second wallet.
+The project treasury account (the platform's own wallet, which receives
+payments) is:
 
 ```
 NQ94 FAH0 YLHQ S40D 5B2U XUDR L6XG 3GYU 2JEX

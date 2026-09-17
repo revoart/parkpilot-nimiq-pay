@@ -51,7 +51,7 @@ Deno.serve(async (request) => {
     const { data: reservation, error } = await supabase
       .from('reservations')
       .select(
-        'id, parking_space_id, nimiq_address, start_at, end_at, amount_nim, status, created_at, updated_at, recipient_address, host_amount_nim, fee_amount_nim, destination_name, destination_address, destination_lat, destination_lng, parking_spaces ( id, title, address, latitude, longitude, price_nim, payment_recipient_address, parking_type, covered, ev_charging, accessible, image_url )',
+        'id, parking_space_id, nimiq_address, start_at, end_at, amount_nim, status, created_at, updated_at, recipient_address, host_amount_nim, fee_amount_nim, destination_name, destination_address, destination_lat, destination_lng, parking_spaces ( id, title, address, latitude, longitude, price_nim, parking_type, covered, ev_charging, accessible, image_url )',
       )
       .eq('id', reservation_id)
       .single()
