@@ -103,8 +103,8 @@ export function HostEarningsScreen() {
       <HostShell title="Earnings">
         <EmptyState
           icon={<Wallet className="size-5" />}
-          title="Connect your wallet"
-          description="Connect Nimiq Pay to see your host earnings."
+        title="Connect in Nimiq Pay"
+        description="Connect Nimiq Pay to see your host earnings."
           action={
             <Button size="md" onClick={() => void wallet.connect()}>
               Connect Wallet

@@ -125,8 +125,8 @@ export function ProfileScreen() {
   const [hostSpaces, setHostSpaces] = useState<HostSpace[]>([])
   const [dataLoading, setDataLoading] = useState(false)
 
-  // The driver's NIM lives on the Nimiq chain, so it is read from the chain
-  // rather than from the wallet's EVM provider.
+  // NIM lives on the Nimiq chain, so the balance is read from the chain rather
+  // than from any application record.
   const { balanceLuna, refresh: refreshNimBalance } = useNimBalance(wallet.address)
 
   useEffect(() => {
