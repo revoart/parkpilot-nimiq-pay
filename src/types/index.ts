@@ -138,16 +138,6 @@ export interface Payment {
   created_at: string
 }
 
-export interface WalletIdentity {
-  id: string
-  nmiq_address: string | null
-  public_key: string | null
-  signature: string | null
-  challenge: string | null
-  verified_at: string | null
-  created_at: string
-}
-
 export interface Review {
   id: string
   parking_space_id: string

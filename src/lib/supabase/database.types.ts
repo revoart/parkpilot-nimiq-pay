@@ -637,36 +637,6 @@ export type Database = {
           },
         ]
       }
-      wallet_identities: {
-        Row: {
-          challenge: string | null
-          created_at: string
-          id: string
-          nmiq_address: string | null
-          public_key: string | null
-          signature: string | null
-          verified_at: string | null
-        }
-        Insert: {
-          challenge?: string | null
-          created_at?: string
-          id?: string
-          nmiq_address?: string | null
-          public_key?: string | null
-          signature?: string | null
-          verified_at?: string | null
-        }
-        Update: {
-          challenge?: string | null
-          created_at?: string
-          id?: string
-          nmiq_address?: string | null
-          public_key?: string | null
-          signature?: string | null
-          verified_at?: string | null
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
