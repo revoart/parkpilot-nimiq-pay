@@ -6,6 +6,7 @@ import {
   assertTreasuryKeyPair,
   buildSignedPayout,
   deriveKeyPair,
+  payoutValidityStartHeight,
 } from './lib/treasury.ts'
 import { nimToLuna } from '../src/lib/nimiq/amounts.ts'
 
@@ -307,7 +308,7 @@ async function main(): Promise<void> {
       sender: config.treasuryAddress,
       recipient: claim.host_address,
       amountNim: String(claim.amount_nim),
-      validityStartHeight: head,
+        validityStartHeight: payoutValidityStartHeight(head),
       networkId: config.networkId,
     })
 

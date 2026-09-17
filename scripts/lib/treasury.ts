@@ -98,6 +98,28 @@ export function assertNotSelfSend(sender: string, recipient: string): void {
   }
 }
 
+/**
+ * How far behind the chain head a payout's validityStartHeight must sit.
+ *
+ * Nimiq evaluates the sender's balance at `validityStartHeight`, not at the
+ * head. Broadcasting with the head height — or anything close to it — fails
+ * execution with `executionResult: false`, even though the signature verifies
+ * locally, the transaction is valid at every height, and the balance is far
+ * larger than the amount.
+ *
+ * This cost several real transactions to isolate: 2700 NIM, 2000 NIM and 1 Luna
+ * all failed with the head height, and the same 1 Luna transfer succeeded the
+ * moment the height was set well behind the head.
+ *
+ * Do not "simplify" this back to the current block number.
+ */
+export const VALIDITY_LOOKBACK_BLOCKS = 200
+
+/** A validityStartHeight that will actually execute. */
+export function payoutValidityStartHeight(head: number): number {
+  return Math.max(0, head - VALIDITY_LOOKBACK_BLOCKS)
+}
+
 export interface BuildPayoutTransactionInput {
   sender: string
   recipient: string
