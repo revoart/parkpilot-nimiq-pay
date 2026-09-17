@@ -236,6 +236,21 @@ export function ParkingPassScreen() {
         // The two legs stay together: driving to the space, then walking from
         // it, are one journey and are confusing apart.
         <div className="space-y-2">
+          {/*
+            The session screen holds the live countdown and the extender, and
+            this pass is the only route to it. That link used to sit inside the
+            collapsed receipt block, so both features looked like they had been
+            removed when they were simply unreachable.
+          */}
+          <Button
+            variant="outline"
+            full
+            size="lg"
+            onClick={() => navigate(`/session/${reservation.id}`)}
+          >
+            Manage session
+          </Button>
+
           {/* Stage 1: drive to the parking space. Never the destination. */}
           <Button
             full

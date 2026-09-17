@@ -1,6 +1,6 @@
 ﻿import { createClient } from 'npm:@supabase/supabase-js@2'
 
-import { isValidNimiqAddress } from '../_shared/nimiq.ts'
+import { readToken, verifyToken } from '../_shared/auth.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
 
 interface Body {
@@ -17,21 +17,29 @@ Deno.serve(async (request) => {
   try {
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body) return errorResponse(request, 'Invalid JSON body.')
-    if (!isValidNimiqAddress(body.nimiq_address)) {
-      return errorResponse(request, 'Invalid Nimiq address.')
-    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    const owner = body.nimiq_address.toLowerCase()
+    // Identity comes from the signed-in token, never from the request body —
+    // otherwise anyone could read any host's bookings by naming them.
+    const owner = await verifyToken(readToken(request, body))
+    if (!owner) {
+      return errorResponse(
+        request,
+        'Sign in with your account to continue.',
+        401,
+      )
+    }
+
+    const ownerKey = owner.toLowerCase()
 
     const { data: spaces, error: spaceError } = await supabase
       .from('parking_spaces')
       .select('id')
-      .ilike('owner_nimiq_address', owner)
+      .ilike('owner_nimiq_address', ownerKey)
 
     if (spaceError) throw spaceError
 

@@ -9,8 +9,11 @@ import {
 // The pure Nimiq helpers are shared with the app rather than duplicated. These
 // two modules deliberately have no dependency on the mini app SDK, so importing
 // them here does not drag the wallet SDK into the operator script.
-import { LUNA_PER_NIM, nimToLuna } from '../../src/lib/nimiq/amounts'
-import { isValidNimiqAddress } from '../../src/lib/nimiq/address'
+// Node ESM requires explicit extensions. Without them the payout script dies on
+// import — which is why no withdrawal has ever been sent — while its unit tests
+// pass, because vitest resolves extensionless specifiers that Node will not.
+import { LUNA_PER_NIM, nimToLuna } from '../../src/lib/nimiq/amounts.ts'
+import { isValidNimiqAddress } from '../../src/lib/nimiq/address.ts'
 
 /**
  * Treasury key handling for the payout signer.

@@ -69,6 +69,16 @@ export interface NimiqTransaction {
   to: string
   value: number
   fee: number
+  /**
+   * Attached transaction data, as hex.
+   *
+   * Nimiq's RPC exposes this as **two** fields — `senderData` and
+   * `recipientData` — and has no `data` field at all. Reading `data` silently
+   * yields undefined, which is how every sign-in transfer was rejected as
+   * "does not carry this challenge" despite carrying it correctly.
+   */
+  senderData?: string | null
+  recipientData?: string | null
   validityStartHeight: number
   networkId: number
   executionResult: boolean

@@ -65,6 +65,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [providerAvailable, setProviderAvailable] = useState(false)
   const [status, setStatus] = useState<WalletStatus>('disconnected')
   const [address, setAddress] = useState<string | null>(null)
+
+  // Sign-in verifies which account actually signed, and that can differ from the
+  // first account `listAccounts()` returns. Adopt the verified one as soon as
+  // the server confirms it, rather than showing the account we merely claimed.
+  useEffect(() => {
+    const onAccount = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail
+      if (!detail) return
+      setAddress(detail)
+      storeAddress(detail)
+      setStatus('connected')
+    }
+    window.addEventListener('parkpilot:account', onAccount)
+    return () => window.removeEventListener('parkpilot:account', onAccount)
+  }, [])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {

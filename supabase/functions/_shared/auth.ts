@@ -4,7 +4,6 @@ import { blake2b } from 'npm:@noble/hashes@1/blake2b'
 import {
   isValidNimiqAddress,
   nimiqAddressFromDigest,
-  normalizeNimiqAddress,
 } from './nimiq.ts'
 
 /**
@@ -40,20 +39,42 @@ export function nimiqIdentity(value: string): string {
 /**
  * The exact text the wallet signs.
  *
- * Reconstructed identically on both sides — every field the user sees is part of
- * the message, so nothing can be swapped out after they approve it.
+ * Kept deliberately **tiny** — just a domain tag and the server's one-time
+ * nonce. Nimiq Pay wraps long messages to fit its approval dialog, splitting
+ * them mid-word and even mid-address, and a wrapped message does not verify
+ * against a single-line reconstruction. Keeping it to ~25 characters makes
+ * wrapping impossible and removes that whole class of failure.
+ *
+ * Nothing security-relevant is lost by leaving the address and timestamp out:
+ * `verifyAuthSignature` already derives the address from the public key and
+ * requires it to equal the claimed one, so the address is bound
+ * cryptographically rather than by appearing in the text. The nonce is stored
+ * against the address and single-use, and the expiry is enforced from the
+ * challenge row — so replay and expiry are unaffected.
  */
 export function buildAuthMessage(message: AuthMessage): string {
-  return [
-    'ParkPilot sign-in',
-    `Address: ${normalizeNimiqAddress(message.address)}`,
-    `Nonce: ${message.nonce}`,
-    `Issued at: ${message.issuedAt}`,
-  ].join('\n')
+  return `ParkPilot:${message.nonce}`
 }
 
 export function isValidAddress(value: unknown): value is string {
   return isValidNimiqAddress(value)
+}
+
+/**
+ * The address a public key derives to, or null if the key is malformed.
+ *
+ * Exposed so a failed verification can record what it compared. Temporary
+ * diagnostic support while the wallet's signing scheme is being pinned.
+ */
+export function deriveAddressFromPublicKey(
+  publicKeyHex: string,
+): string | null {
+  try {
+    if (!/^[0-9a-fA-F]{64}$/.test(publicKeyHex)) return null
+    return nimiqAddressFromDigest(blake2b(hexToBytes(publicKeyHex), { dkLen: 32 }))
+  } catch {
+    return null
+  }
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -89,8 +110,37 @@ export async function verifyAuthSignature(
     const derived = nimiqAddressFromDigest(blake2b(publicKey, { dkLen: 32 }))
     if (nimiqIdentity(derived) !== nimiqIdentity(message.address)) return false
 
-    const payload = new TextEncoder().encode(buildAuthMessage(message))
-    return ed25519.verify(signature, payload, publicKey)
+    const raw = new TextEncoder().encode(buildAuthMessage(message))
+
+    // Nimiq Pay's `sign()` does not sign the bare message. The wallet hashes
+    // and/or wraps it first, and the exact framing is not documented — the
+    // provider reference only says "hex strings". Guessing one encoding meant
+    // every genuine signature was rejected while the challenge was issued and
+    // the user had approved the dialog, so the failure looked like a broken
+    // backend.
+    //
+    // Every candidate below is a valid signature over *this* message and *this*
+    // challenge, made with the key behind the claimed address, so accepting any
+    // of them proves exactly the same thing. The security property — that only
+    // the holder of the private key could have produced it — is unaffected.
+    const candidates: Uint8Array[] = [
+      raw,
+      blake2b(raw, { dkLen: 32 }),
+    ]
+
+    // Bitcoin-style signed-message framing, which Nimiq's message signing
+    // follows. Both the plain and length-prefixed forms, raw and hashed.
+    const text = buildAuthMessage(message)
+    for (const prefix of ['\x16Nimiq Signed Message:\n', 'Nimiq Signed Message:\n']) {
+      const framed = new TextEncoder().encode(
+        `${prefix}${new TextEncoder().encode(text).length}${text}`,
+      )
+      candidates.push(framed, blake2b(framed, { dkLen: 32 }))
+    }
+
+    return candidates.some((payload) =>
+      ed25519.verify(signature, payload, publicKey),
+    )
   } catch {
     return false
   }

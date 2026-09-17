@@ -1,12 +1,27 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-import { buildAuthMessage, isValidAddress, nimiqIdentity } from '../_shared/auth.ts'
+import { isValidAddress, nimiqIdentity } from '../_shared/auth.ts'
 import { errorResponse, json, preflight } from '../_shared/http.ts'
+import { getPlatformConfig } from '../_shared/ledger.ts'
 
 const CHALLENGE_TTL_MS = 10 * 60_000
 
+/**
+ * Proof of ownership is a transfer, not a signature.
+ *
+ * Nimiq Pay's `sign()` returns a signature that neither Nimiq's own verifier
+ * nor standard Ed25519 can validate against any message we sent, so signing is
+ * not a usable foundation. A 1 Luna transfer to the treasury proves the same
+ * thing and cannot be forged: only the holder of the private key for an address
+ * can move funds from it. The nonce travels as transaction data, binding the
+ * transfer to this one challenge.
+ */
+export const AUTH_AMOUNT_LUNA = 1
+
 function randomNonce(): string {
-  const bytes = new Uint8Array(16)
+  // 8 bytes → 16 hex characters. Sent as transaction data, so it must stay
+  // well inside Nimiq's 64-byte data limit.
+  const bytes = new Uint8Array(8)
   crypto.getRandomValues(bytes)
   return Array.from(bytes)
     .map((byte) => byte.toString(16).padStart(2, '0'))
@@ -16,9 +31,9 @@ function randomNonce(): string {
 /**
  * Issues a one-time sign-in challenge.
  *
- * Returns the exact text to sign, not structured data: Nimiq Pay's `sign()`
- * takes a string, and the wallet's approval dialog shows it verbatim, so the
- * user can read what they are authorising.
+ * Returns what the wallet must send, and where: the user makes a tiny transfer
+ * to the platform treasury with the nonce attached, and `auth-verify` confirms
+ * it on-chain.
  */
 Deno.serve(async (request) => {
   const options = preflight(request)
@@ -43,6 +58,11 @@ Deno.serve(async (request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
+    const config = await getPlatformConfig(supabase)
+    if (!config.treasuryAddress || !isValidAddress(config.treasuryAddress)) {
+      return errorResponse(request, 'The platform has no receiving address.', 500)
+    }
+
     // Housekeeping — drop used/expired challenges.
     await supabase.rpc('expire_auth_challenges')
 
@@ -61,7 +81,10 @@ Deno.serve(async (request) => {
       nonce,
       issued_at: issuedAt,
       expires_at: expiresAt,
-      message: buildAuthMessage({ address, nonce, issuedAt }),
+      // What the wallet must send, and where.
+      recipient: config.treasuryAddress,
+      amount_luna: AUTH_AMOUNT_LUNA,
+      data: nonce,
     })
   } catch (error) {
     console.error('auth-challenge failed', error)

@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState, type ComponentType } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { GoogleMap } from '@/components/map/GoogleMap'
+import { SpeedBadge } from '@/components/map/SpeedBadge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -249,8 +250,9 @@ export function NavigationScreen() {
         heading={nav.heading}
         follow={follow && nav.isActive}
         followZoom={leg === 'drive' ? 17 : 18}
-        meVariant="arrow"
-        showRecenter={false}
+  meVariant="arrow"
+  showRecenter={false}
+  traffic
         interactive
         onDragStart={() => setFollow(false)}
         bottomInset={240}
@@ -307,6 +309,9 @@ export function NavigationScreen() {
 
       {/* --- Bottom: live ETA. Stops short of the Google wordmark strip. ----- */}
       <div className="safe-bottom absolute inset-x-4 bottom-9 z-[1000] space-y-2">
+        {/* Sits at the top of the bottom stack, so it clears the ETA card and
+            stays well clear of Google's attribution strip. */}
+        <SpeedBadge position={nav.position} speedMps={nav.speedMps} />
         {liveUpdatesDown ? (
           <p className="rounded-xl bg-warning-bg px-3 py-2 text-[11px] font-semibold text-warning">
             Live location is unavailable — showing the last known route.

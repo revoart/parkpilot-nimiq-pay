@@ -138,8 +138,9 @@ export async function uploadParkingPhoto(
 
 export async function listHostSpaces(nimiqAddress: string): Promise<HostSpace[]> {
   const supabase = getSupabase()
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('list-host-spaces', {
-    body: { nimiq_address: nimiqAddress },
+    body: { nimiq_address: nimiqAddress, auth_token: authToken },
   })
 
   if (error) {
@@ -166,8 +167,9 @@ export async function listHostSpaces(nimiqAddress: string): Promise<HostSpace[]>
 
 export async function listHostBookings(nimiqAddress: string): Promise<HostBooking[]> {
   const supabase = getSupabase()
+  const authToken = await requireToken(nimiqAddress)
   const { data, error } = await supabase.functions.invoke('list-host-bookings', {
-    body: { nimiq_address: nimiqAddress },
+    body: { nimiq_address: nimiqAddress, auth_token: authToken },
   })
 
   if (error) {

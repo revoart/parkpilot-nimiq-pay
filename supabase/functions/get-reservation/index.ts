@@ -48,30 +48,47 @@ Deno.serve(async (request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    const { data: reservation, error } = await supabase
+    const RESERVATION_COLUMNS =
+      'id, parking_space_id, nimiq_address, start_at, end_at, amount_nim, status, created_at, updated_at, recipient_address, host_amount_nim, fee_amount_nim, destination_name, destination_address, destination_lat, destination_lng, parking_spaces ( id, title, address, latitude, longitude, price_nim, parking_type, covered, ev_charging, accessible, image_url )'
+
+    const { data: byId } = await supabase
       .from('reservations')
-      .select(
-        'id, parking_space_id, nimiq_address, start_at, end_at, amount_nim, status, created_at, updated_at, recipient_address, host_amount_nim, fee_amount_nim, destination_name, destination_address, destination_lat, destination_lng, parking_spaces ( id, title, address, latitude, longitude, price_nim, parking_type, covered, ev_charging, accessible, image_url )',
-      )
+      .select(RESERVATION_COLUMNS)
       .eq('id', reservation_id)
-      .single()
+      .ilike('nimiq_address', nimiq_address)
+      .maybeSingle()
 
-    if (error || !reservation) {
+    // The navigation screen reaches the pass from a parking-space context and
+    // only knows the space id, so `/pass/<space-id>` used to fail with
+    // "Reservation not found" the moment a driver arrived and tapped through.
+    // Rather than plumb the reservation id through every route, the same lookup
+    // is retried against the space and the caller's own booking is resolved.
+    // Both ids are uuids, so the first lookup simply finds nothing.
+    const { data: bySpace } = byId
+      ? { data: null }
+      : await supabase
+          .from('reservations')
+          .select(RESERVATION_COLUMNS)
+          .eq('parking_space_id', reservation_id)
+          .ilike('nimiq_address', nimiq_address)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+    const reservation = byId ?? bySpace
+
+    if (!reservation) {
       return errorResponse(request, 'Reservation not found.', 404)
     }
 
-    if (
-      reservation.nimiq_address.toLowerCase() !== nimiq_address.toLowerCase()
-    ) {
-      return errorResponse(request, 'Reservation not found.', 404)
-    }
+    const reservationId = reservation.id
 
     const { data: payment } = await supabase
       .from('payments')
       .select(
         'id, status, tx_hash, block_number, confirmed_at, amount_nim, sender_address, recipient_address, token_contract',
       )
-      .eq('reservation_id', reservation_id)
+      .eq('reservation_id', reservationId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()

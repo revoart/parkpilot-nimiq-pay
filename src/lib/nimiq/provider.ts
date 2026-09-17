@@ -12,6 +12,11 @@ export interface NimiqBasicTransaction {
   recipient: string
   /** Amount in Luna (1 NIM = 100,000 Luna). */
   value: number
+  /**
+   * Text to attach to the transaction. Used to bind a sign-in challenge to a
+   * specific transfer. Nimiq caps transaction data at 64 bytes.
+   */
+  data?: string
   /** Fee in Luna. Omitted lets Nimiq Pay choose, using 0 when possible. */
   fee?: number
   validityStartHeight?: number
@@ -23,6 +28,9 @@ export interface NimiqProvider {
   isConsensusEstablished: () => Promise<boolean>
   getBlockNumber: () => Promise<number>
   sendBasicTransaction: (transaction: NimiqBasicTransaction) => Promise<string>
+  sendBasicTransactionWithData: (
+    transaction: NimiqBasicTransaction & { data: string },
+  ) => Promise<string>
 }
 
 let nimiqPromise: Promise<NimiqProvider> | null = null
@@ -63,9 +71,21 @@ export async function listNimiqAccounts(): Promise<string[]> {
 
 export async function signWithNimiq(message: string): Promise<NimiqSignResult> {
   const nimiq = await initNimiq()
-  const result = await nimiq.sign(message)
+
+  // Named explicitly so a wallet-side failure is never mistaken for a backend
+  // one. `sign()` is the only step that opens an approval dialog, so when it
+  // throws, the user either dismissed that dialog or the wallet rejected the
+  // message itself — both worth saying out loud.
+  let result: NimiqSignResult
+  try {
+    result = await nimiq.sign(message)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`Nimiq Pay could not sign the message: ${reason}`)
+  }
+
   if (!result?.publicKey || !result?.signature) {
-    throw new Error('Nimiq signing returned an unexpected response.')
+    throw new Error('Nimiq Pay returned no signature.')
   }
   return result
 }
@@ -99,10 +119,15 @@ export async function sendNimiqPayment(
   }
 
   const nimiq = await initNimiq()
-  const hash = await nimiq.sendBasicTransaction({
-    ...transaction,
-    recipient: formatNimiqAddress(transaction.recipient),
-  })
+
+  const recipient = formatNimiqAddress(transaction.recipient)
+  const hash = transaction.data
+    ? await nimiq.sendBasicTransactionWithData({
+        ...transaction,
+        recipient,
+        data: transaction.data,
+      })
+    : await nimiq.sendBasicTransaction({ ...transaction, recipient })
 
   if (!hash) throw new Error('Nimiq payment returned no transaction hash.')
   return hash

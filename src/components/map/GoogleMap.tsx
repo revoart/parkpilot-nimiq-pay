@@ -1,6 +1,6 @@
 /// <reference types="google.maps" />
 import { useEffect, useRef, useState } from 'react'
-import { LocateFixed } from 'lucide-react'
+import { LocateFixed, TrafficCone } from 'lucide-react'
 
 import { useTheme } from '@/hooks/useTheme'
 import {
@@ -46,9 +46,13 @@ export interface MapPoint {
 const CENTER_TAU_MS = 420
 const HEADING_TAU_MS = 380
 const ZOOM_TAU_MS = 500
-
 /** Ignore a frame gap longer than this (a backgrounded tab) when easing. */
 const MAX_FRAME_MS = 100
+/**
+ * Tilt for the follow camera, in degrees — the driver's-eye perspective real
+ * navigation apps use. Vector maps only; raster ignores it.
+ */
+const FOLLOW_TILT = 45
 
 interface GoogleMapProps {
   points: MapPoint[]
@@ -83,6 +87,14 @@ interface GoogleMapProps {
    * its own, so the map never shows two competing controls.
    */
   showRecenter?: boolean
+  /**
+   * Show the live traffic layer. Free with the Maps JavaScript API — no extra
+   * key, no extra billing — and the closest thing to how Google Maps itself
+   * looks out of the box.
+   */
+  traffic?: boolean
+  /** Render a button that toggles traffic on and off. */
+  showTrafficToggle?: boolean
   /** Fires after the map settles, so callers can offer "search this area". */
   onCenterChange?: (center: LatLng) => void
   /** Fires when the user starts dragging the map (not programmatic moves). */
@@ -128,6 +140,8 @@ export function GoogleMap({
   followZoom = 17,
   meVariant = 'dot',
   showRecenter = true,
+  traffic = false,
+  showTrafficToggle = false,
   onCenterChange,
   onDragStart,
   bottomInset = 0,
@@ -155,6 +169,30 @@ export function GoogleMap({
   const onSelectRef = useRef(onSelect)
   const themeRef = useRef(theme)
   const [ready, setReady] = useState(false)
+  const [trafficOn, setTrafficOn] = useState(traffic)
+
+  // Traffic is a layer on the map rather than map options, so it is attached
+  // and detached on its own. Gated on `ready` because the instance does not
+  // exist until initialisation finishes.
+  useEffect(() => {
+    const instance = map.current
+    if (!ready || !instance || !trafficOn) return
+
+    let layer: google.maps.TrafficLayer | null = null
+    let cancelled = false
+
+    // `loadMaps` is memoised, so this resolves immediately once the map exists.
+    void loadMaps().then((maps) => {
+      if (cancelled) return
+      layer = new maps.TrafficLayer()
+      layer.setMap(instance)
+    })
+
+    return () => {
+      cancelled = true
+      layer?.setMap(null)
+    }
+  }, [ready, trafficOn])
   const [failed, setFailed] = useState(() => !isMapsConfigured())
 
   /** Target camera, set from the latest GPS fix. */
@@ -276,8 +314,8 @@ export function GoogleMap({
             // the heading — but a rotation the driver performs themselves is
             // treated as taking manual control, which stops the follow camera
             // from fighting the gesture. Tilt stays disabled entirely.
-            instance.setHeadingInteractionEnabled(true)
-            instance.setTiltInteractionEnabled(false)
+    instance.setHeadingInteractionEnabled(true)
+    instance.setTiltInteractionEnabled(true)
           }
           return true
         }
@@ -574,6 +612,9 @@ export function GoogleMap({
         zoom: camZoom.current,
       }
       if (rotation !== null) camera.heading = rotation
+      // The tilted driver's view only exists on vector maps — raster silently
+      // ignores tilt, exactly as it ignores heading, so it is gated the same way.
+      if (rotation !== null && vectorRef.current) camera.tilt = FOLLOW_TILT
 
       lastProgrammaticMove.current = Date.now()
       writingCamera.current = true
@@ -749,6 +790,22 @@ export function GoogleMap({
   return (
     <div className={cn('relative', className)}>
       <div ref={container} className="h-full w-full bg-map" />
+      {interactive && showTrafficToggle ? (
+        <button
+          type="button"
+          aria-label={trafficOn ? 'Hide traffic' : 'Show traffic'}
+          aria-pressed={trafficOn}
+          onClick={() => setTrafficOn((value) => !value)}
+          className={cn(
+            'absolute right-3 flex size-10 items-center justify-center rounded-full shadow-sm shadow-black/10',
+            trafficOn ? 'bg-brand text-brand-fg' : 'bg-surface-raised text-ink',
+            // Stack above the recenter button rather than overlapping it.
+            me && showRecenter ? 'bottom-16' : 'bottom-3',
+          )}
+        >
+          <TrafficCone className="size-[18px]" />
+        </button>
+      ) : null}
       {interactive && me && showRecenter ? (
         <button
           type="button"
