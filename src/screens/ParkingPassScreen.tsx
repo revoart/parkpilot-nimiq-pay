@@ -237,6 +237,19 @@ export function ParkingPassScreen() {
         // it, are one journey and are confusing apart.
         <div className="space-y-2">
           {/*
+            Chat starts here. The inbox lists only conversations that exist, so
+            without this a driver with a booking has no way to begin one.
+          */}
+          <Button
+            variant="outline"
+            full
+            size="lg"
+            onClick={() => navigate(`/messages/${reservation.id}`)}
+          >
+            Message host
+          </Button>
+
+          {/*
             The session screen holds the live countdown and the extender, and
             this pass is the only route to it. That link used to sit inside the
             collapsed receipt block, so both features looked like they had been

@@ -21,7 +21,7 @@ import {
 
 const RPC = 'https://rpc.nimiqwatch.com'
 
-async function rpc(method, params) {
+async function rpc(method: string, params: unknown[]) {
   const response = await fetch(RPC, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -30,7 +30,7 @@ async function rpc(method, params) {
   return await response.json()
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
