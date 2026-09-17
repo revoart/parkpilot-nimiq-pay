@@ -365,15 +365,15 @@ export function PaymentScreen() {
     [details],
   )
 
-  // NIM goes to the ParkPilot treasury, not the host's own wallet: hosts are
-  // paid out of the treasury so the platform fee can be taken.
+  // NIM goes to the ParkPilot platform account, not the host's own wallet:
+  // hosts are paid out of it so the platform fee can be taken.
   const recipient = details?.reservation.recipient_address ?? ''
   const recipientValid = isValidNimiqAddress(recipient)
 
   /**
-   * The treasury is a real Nimiq wallet, so it is entirely possible to connect
-   * with the account that receives the payment — especially when the operator
-   * and the treasury are the same person.
+   * The recipient is a real Nimiq account, so it is possible to connect with
+   * the account that receives the payment — an operator testing their own
+   * marketplace, most obviously.
    *
    * Nimiq rejects a transaction whose sender equals its recipient ("Sender
    * Equals Recipient"), and the wallet's own client will happily build and sign
