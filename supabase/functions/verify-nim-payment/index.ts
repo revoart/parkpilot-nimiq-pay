@@ -215,14 +215,22 @@ Deno.serve(async (request) => {
     const amountNim = String(reservation.amount_nim)
     const expectedLuna = nimToLuna(amountNim)
 
-    const { data: setting } = await supabase
+    const { data: settings } = await supabase
       .from('platform_settings')
-      .select('value')
-      .eq('key', 'min_payment_confirmations')
-      .maybeSingle()
-    const minConfirmations = Number.isFinite(Number(setting?.value))
-      ? Number(setting?.value)
-      : DEFAULT_MIN_CONFIRMATIONS
+      .select('key, value')
+      .in('key', ['min_payment_confirmations', 'nimiq_network_id'])
+
+    const readSetting = (key: string, fallback: number): number => {
+      const row = (settings ?? []).find((entry) => entry.key === key)
+      const value = Number(row?.value)
+      return Number.isFinite(value) ? value : fallback
+    }
+
+    const minConfirmations = readSetting(
+      'min_payment_confirmations',
+      DEFAULT_MIN_CONFIRMATIONS,
+    )
+    const expectedNetworkId = readSetting('nimiq_network_id', NIMIQ_MAINNET_ID)
 
     const pendingResponse = async (
       status: string,
@@ -313,6 +321,19 @@ Deno.serve(async (request) => {
     const actualRecipient = normalizeNimiqAddress(transaction.to)
     const expectedSender = normalizeNimiqAddress(reservation.nimiq_address)
     const actualSender = normalizeNimiqAddress(transaction.from)
+
+    // A transaction carries the network it was signed for. If it does not match
+    // ours, this is a payment for a different chain that merely looks like one —
+    // Nimiq refuses such a transaction as "Foreign Network" — and treating it as
+    // a real payment would credit a host for money that never arrived here.
+    if (
+      typeof transaction.networkId === 'number' &&
+      transaction.networkId !== expectedNetworkId
+    ) {
+      return await failedResponse(
+        `That transaction was signed for a different Nimiq network (${transaction.networkId}, expected ${expectedNetworkId}).`,
+      )
+    }
 
     if (actualRecipient !== expectedRecipient) {
       return await failedResponse(

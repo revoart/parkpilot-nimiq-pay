@@ -26,6 +26,7 @@ import { trackEvent } from '@/lib/analytics/events'
 import {
   isValidNimiqAddress,
   nimToLuna,
+  normalizeNimiqAddress,
   sendNimiqPayment,
 } from '@/lib/nimiq'
 import { pollNimPayment } from '@/lib/payments'
@@ -369,6 +370,21 @@ export function PaymentScreen() {
   const recipient = details?.reservation.recipient_address ?? ''
   const recipientValid = isValidNimiqAddress(recipient)
 
+  /**
+   * The treasury is a real Nimiq wallet, so it is entirely possible to connect
+   * with the account that receives the payment — especially when the operator
+   * and the treasury are the same person.
+   *
+   * Nimiq rejects a transaction whose sender equals its recipient ("Sender
+   * Equals Recipient"), and the wallet's own client will happily build and sign
+   * one, so the failure surfaces with no explanation. Catching it here turns a
+   * baffling wallet error into a sentence the driver can act on.
+   */
+  const isSelfPayment =
+    recipientValid &&
+    wallet.address !== null &&
+    normalizeNimiqAddress(wallet.address) === normalizeNimiqAddress(recipient)
+
   const processingPhase: 'sending' | 'submitted' | 'verifying' | null =
     phase === 'sending' || phase === 'submitted' || phase === 'verifying'
       ? phase
@@ -381,6 +397,15 @@ export function PaymentScreen() {
     if (!recipientValid) {
       setMessage('The payment address is not configured correctly.')
       setPhase('failed')
+      return
+    }
+
+    if (isSelfPayment) {
+      // Stay in review so switching accounts is all it takes to continue.
+      setPhase('review')
+      setMessage(
+        'This account is the payment recipient, and Nimiq does not allow a transfer to yourself. Connect a different Nimiq account to pay.',
+      )
       return
     }
 
@@ -574,10 +599,17 @@ export function PaymentScreen() {
         View Parking Pass
       </Button>
     ) : processingPhase ? null : (
-      <Button full size="lg" onClick={() => void handlePay()}>
-        {phase === 'failed'
-          ? 'Try Again'
-          : `Pay ${formatNim(reservation.amount_nim)} NIM`}
+      <Button
+        full
+        size="lg"
+        onClick={() => void handlePay()}
+        disabled={isSelfPayment}
+      >
+        {isSelfPayment
+          ? 'Connect a different account to pay'
+          : phase === 'failed'
+            ? 'Try Again'
+            : `Pay ${formatNim(reservation.amount_nim)} NIM`}
       </Button>
     )
 
