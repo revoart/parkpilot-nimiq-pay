@@ -191,20 +191,8 @@ export function SearchScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dest?.lat, dest?.lng, walkTargetKey])
 
-  // Price vs walking convenience — the driver decides; we never auto-pick cheapest.
-  const ordered = useMemo(() => {
-    if (!dest || sort === 'price') return results
-    return [...results].sort((a, b) => {
-      const wa = walkLegs[a.id]?.durationSeconds
-      const wb = walkLegs[b.id]?.durationSeconds
-      if (wa === undefined && wb === undefined) return a.distance_m - b.distance_m
-      if (wa === undefined) return 1
-      if (wb === undefined) return -1
-      return wa - wb
-    })
-  }, [results, sort, dest, walkLegs])
-
   // ParkPilot Pick: deterministic blend of price and walk time. Not AI.
+  // Declared before `ordered` because the ordering puts the Pick first.
   const pickId = useMemo(() => {
     if (!dest || results.length < 3) return null
     const candidates = results.filter((space) => walkLegs[space.id])
@@ -225,6 +213,32 @@ export function SearchScreen() {
     }
     return best?.id ?? null
   }, [results, walkLegs, dest])
+
+  // Price vs walking convenience — the driver decides; we never auto-pick cheapest.
+  const ordered = useMemo(() => {
+    const base =
+      !dest || sort === 'price'
+        ? results
+        : [...results].sort((a, b) => {
+            const wa = walkLegs[a.id]?.durationSeconds
+            const wb = walkLegs[b.id]?.durationSeconds
+            if (wa === undefined && wb === undefined) {
+              return a.distance_m - b.distance_m
+            }
+            if (wa === undefined) return 1
+            if (wb === undefined) return -1
+            return wa - wb
+          })
+
+    // The recommendation leads the list, whatever the driver sorted by. It is
+    // already badged, so it is clear why it sits first. Guarded so a missing
+    // Pick leaves the ordering untouched rather than adding an empty row or a
+    // duplicate.
+    if (!pickId) return base
+    const pick = base.find((space) => space.id === pickId)
+    if (!pick) return base
+    return [pick, ...base.filter((space) => space.id !== pickId)]
+  }, [results, sort, dest, walkLegs, pickId])
 
   const goToPlace = useCallback(
     (place: Place) => {
