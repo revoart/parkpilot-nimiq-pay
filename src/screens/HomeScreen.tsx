@@ -23,10 +23,12 @@ import { Handle } from '@/components/ui/Handle'
 import { ParkingCardSkeleton, Skeleton } from '@/components/ui/Skeleton'
 import { StateCard } from '@/components/ui/StateCard'
 import { WalletPill } from '@/components/wallet/WalletPill'
+import { useDestination } from '@/hooks/useDestination'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useNearbyParking } from '@/hooks/useNearbyParking'
 import { useWallet } from '@/hooks/useWallet'
 import { NEARBY_RADIUS_M } from '@/lib/parking'
+import { estimatedWalkMinutes } from '@/lib/routing/walkEstimate'
 import { useUnreadNotificationCount } from '@/lib/notifications/unread'
 import { cn } from '@/utils/cn'
 import { haversineKm, type LatLng } from '@/utils/geo'
@@ -84,6 +86,16 @@ export function HomeScreen() {
    * present parking that has nothing to do with the driver as if it were
    * nearby, and would label a place they are not in as "near you".
    */
+  // Walking time from each listing to the driver's destination, so spaces can
+  // be compared on price and the walk rather than price alone. Null unless a
+  // destination is set, in which case the card shows nothing extra.
+  const destination = useDestination()
+  const walkMinutesFor = (space: { latitude: number; longitude: number }) =>
+    estimatedWalkMinutes(
+      { lat: space.latitude, lng: space.longitude },
+      destination,
+    )
+
   const searchCenter = searchArea ?? geo.coords
   const located = geo.coords !== null
 
@@ -253,6 +265,7 @@ export function HomeScreen() {
               space={selected}
               featured
               distanceKm={selected.distance_m / 1000}
+                      walkMinutes={walkMinutesFor(selected)}
               busyUntil={selected.busy_until}
               onSelect={(space) => navigate(`/parking/${space.id}`)}
             />
@@ -382,6 +395,7 @@ export function HomeScreen() {
                           compact
                           space={space}
                           distanceKm={space.distance_m / 1000}
+                          walkMinutes={walkMinutesFor(space)}
                           busyUntil={space.busy_until}
                           onSelect={(item) => navigate(`/parking/${item.id}`)}
                         />
@@ -392,6 +406,7 @@ export function HomeScreen() {
                       space={visible[0]}
                       featured
                       distanceKm={visible[0].distance_m / 1000}
+                      walkMinutes={walkMinutesFor(visible[0])}
                       busyUntil={visible[0].busy_until}
                       onSelect={(space) => navigate(`/parking/${space.id}`)}
                     />

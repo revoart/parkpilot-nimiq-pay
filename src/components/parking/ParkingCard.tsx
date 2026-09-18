@@ -24,6 +24,11 @@ export type ParkingCardSpace = ParkingSpace & {
 interface ParkingCardProps {
   space: ParkingCardSpace
   distanceKm?: number | null
+  /**
+   * Estimated walking minutes from the space to the driver's destination.
+   * Null when the driver has not set one, in which case nothing is shown.
+   */
+  walkMinutes?: number | null
   onSelect?: (space: ParkingSpace) => void
   featured?: boolean
   /** Condensed card for tight spots such as the home carousel. */
@@ -64,6 +69,7 @@ function PricePill({ price, className }: { price: number; className?: string }) 
 export function ParkingCard({
   space,
   distanceKm,
+  walkMinutes,
   onSelect,
   featured = false,
   compact = false,
@@ -124,6 +130,15 @@ export function ParkingCard({
               {space.address}
               {typeof distanceKm === 'number'
                 ? ` · ${formatDistanceKm(distanceKm)}`
+                : ''}
+              {/*
+                Walking time to the driver's destination, so listings can be
+                compared on price and the walk rather than price alone. The
+                tilde marks it as a straight-line estimate; the exact route is
+                fetched when the listing is opened.
+              */}
+              {typeof walkMinutes === 'number'
+                ? ` · ≈ ${walkMinutes} min walk`
                 : ''}
             </span>
           </p>
