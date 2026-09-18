@@ -1,4 +1,5 @@
 ﻿import { requireToken } from '@/lib/auth'
+import { resizeImageForUpload } from '@/lib/images/resize'
 import { getSupabase } from '@/lib/supabase/client'
 import { readFunctionError } from '@/lib/supabase/functions'
 import type { ParkingSpace, PaymentStatus, ReservationStatus } from '@/types'
@@ -113,8 +114,15 @@ export async function uploadParkingPhoto(
   const { url, anonKey } = requireSupabase()
   const authToken = await requireToken(nimiqAddress)
 
+  // Shrink before uploading. Hosts upload full-resolution camera output — one
+  // real listing photo here is 4.45 MB — and every later view downloads it in
+  // full. Resizing once on the way in is what makes the listing grid fast, and
+  // it is the only place it can be done: Supabase's on-the-fly resizing is a
+  // paid-plan feature and returns 404 on this project.
+  const upload = await resizeImageForUpload(file)
+
   const form = new FormData()
-  form.append('file', file)
+  form.append('file', upload)
   form.set('auth_token', authToken)
   if (parkingSpaceId) form.set('parking_space_id', parkingSpaceId)
 
